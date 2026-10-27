@@ -89,6 +89,10 @@ jobs:
         if: failure()
         run: ./scripts/diagnose-launch.ps1 -ExePath $env:LANGFLOW_DESKTOP_EXE
 
+      - name: Diagnose msedgedriver attach
+        if: failure()
+        run: ./scripts/diagnose-driver.ps1 -ExePath $env:LANGFLOW_DESKTOP_EXE
+
       - name: Collect Langflow Desktop logs
         if: always()
         run: |
