@@ -1,4 +1,4 @@
-import { $, expect } from '@wdio/globals';
+import { $, browser, expect } from '@wdio/globals';
 
 // First launch on a clean machine: Terms → email registration → backend install → main page.
 // The steps share one app instance and run in order; each `it` starts where the previous one ended.
@@ -28,8 +28,8 @@ const MSG_EMAIL_INVALID = 'Enter a valid email address';
 // Placeholder domain: the registration must never reach a real inbox.
 const E2E_EMAIL = 'langflow-desktop-e2e@example.com';
 
-// Waiting for the main page covers the uv/Python/Langflow install on a clean machine.
-const BACKEND_READY_TIMEOUT = 10 * 60_000;
+// Waiting for the main page covers the uv/Python/Langflow install on a clean machine (~7 min on a runner).
+const BACKEND_READY_TIMEOUT = 15 * 60_000;
 
 const byText = (text: string) => $(`//*[normalize-space(text())="${text}"]`);
 
@@ -108,7 +108,21 @@ describe('First boot on a clean machine @smoke', () => {
 
   describe('Setup and first start', () => {
     it('installs and starts the backend, then lands on the main page', async () => {
-      await $(sel.mainPageTitle).waitForDisplayed({ timeout: BACKEND_READY_TIMEOUT });
+      // Log each loading-screen stage as it changes, so a slow or stuck install shows where it stopped.
+      const started = Date.now();
+      let lastStage = '';
+      await browser.waitUntil(
+        async () => {
+          if (await $(sel.mainPageTitle).isDisplayed()) return true;
+          const stage = (await $('body').getText()).trim().split('\n')[0] ?? '';
+          if (stage !== lastStage) {
+            console.log(`[setup +${Math.round((Date.now() - started) / 1000)}s] ${stage}`);
+            lastStage = stage;
+          }
+          return false;
+        },
+        { timeout: BACKEND_READY_TIMEOUT, interval: 5_000, timeoutMsg: `main page not shown; last stage: "${lastStage}"` },
+      );
       expect(await backendStatus()).toBe(200);
     });
   });

@@ -82,20 +82,26 @@ jobs:
       - name: Run E2E
         run: npm test
 
-      # Runs after the tests so a force-killed instance can't leave crash-recovery state behind for them.
-      - name: Diagnose app launch (no WebDriver)
-        if: failure()
-        run: ./scripts/diagnose-launch.ps1 -ExePath $env:LANGFLOW_DESKTOP_EXE
-
+      # Collect straight after the tests: relaunching the app would rotate its log and lose the run's history.
       - name: Collect Langflow Desktop logs
         if: always()
         run: |
-          $dest = 'test-results/app-logs'
-          New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          # tauri-plugin-log writes to %LOCALAPPDATA%\<identifier>\logs; the backend writes under ~/.langflow
-          @((Join-Path $env:LOCALAPPDATA 'com.LangflowDesktop\logs'), "$HOME/.langflow") |
-            ForEach-Object { Get-ChildItem $_ -Recurse -Include *.log -ErrorAction SilentlyContinue } |
-            Copy-Item -Destination $dest -ErrorAction SilentlyContinue
+          $roots = @{
+            local   = Join-Path $env:LOCALAPPDATA 'com.LangflowDesktop'
+            roaming = Join-Path $env:APPDATA 'com.LangflowDesktop'
+          }
+          foreach ($name in $roots.Keys) {
+            $root = $roots[$name]
+            if (-not (Test-Path $root)) { continue }
+            # Skip the venv: thousands of package files, none of them logs we need.
+            Get-ChildItem $root -Recurse -File -Include *.log, *.txt -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -notmatch '\\\.langflow-venv\\' } |
+              ForEach-Object {
+                $dest = Join-Path "test-results/app-logs/$name" $_.FullName.Substring($root.Length)
+                New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
+                Copy-Item -LiteralPath $_.FullName -Destination $dest
+              }
+          }
 
       - name: Upload results
         if: always()

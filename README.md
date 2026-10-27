@@ -78,7 +78,6 @@ Feche o Langflow Desktop antes de rodar: o WebdriverIO abre a própria instânci
 | `wdio.conf.ts` | Abre o app com a porta de depuração, sobe o `msedgedriver` (versão do WebView2 instalado) e conecta |
 | `test/specs/first-boot.spec.ts` | Primeiro boot: Termos (aceitar/recusar/revisar) → cadastro de e-mail (validações, consentimentos) → instalação → tela principal |
 | `scripts/install-langflow-desktop.ps1` | Instala o MSI silenciosamente e imprime o caminho do executável |
-| `scripts/diagnose-launch.ps1` | Só em falha: abre o app sem WebDriver e registra processos, porta 7860 e log do app |
 | `.github/workflows/e2e-windows.yml` | Pipeline do CI |
 
 ## Escrevendo testes
