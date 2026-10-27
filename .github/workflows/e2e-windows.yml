@@ -63,16 +63,14 @@ jobs:
           "LANGFLOW_DESKTOP_EXE=$exe" >> $env:GITHUB_ENV
           "Installed: ``$($msi.Name)`` → ``$exe``" >> $env:GITHUB_STEP_SUMMARY
 
-      - name: Cache tauri-driver
-        id: tauri-driver-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin/tauri-driver.exe
-          key: tauri-driver-${{ runner.os }}-v1
-
-      - name: Install tauri-driver
-        if: steps.tauri-driver-cache.outputs.cache-hit != 'true'
-        run: cargo install tauri-driver --locked
+      # Runner processes are elevated, and elevated WebView2 hosts ignore WEBVIEW2_* env vars and HKCU
+      # policies. The HKLM AdditionalBrowserArguments policy is still honoured, so it opens the debug
+      # port that msedgedriver attaches to (see wdio.conf.ts). "*" = every WebView2 app on this throwaway VM.
+      - name: Enable WebView2 remote debugging (HKLM policy)
+        run: |
+          $key = 'HKLM:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name '*' -Value '--remote-debugging-port=9222' -PropertyType String -Force | Out-Null
 
       - uses: actions/setup-node@v4
         with:
@@ -88,10 +86,6 @@ jobs:
       - name: Diagnose app launch (no WebDriver)
         if: failure()
         run: ./scripts/diagnose-launch.ps1 -ExePath $env:LANGFLOW_DESKTOP_EXE
-
-      - name: Diagnose WebView2 args and debuggerAddress attach
-        if: failure()
-        run: ./scripts/diagnose-attach.ps1 -ExePath $env:LANGFLOW_DESKTOP_EXE
 
       - name: Collect Langflow Desktop logs
         if: always()

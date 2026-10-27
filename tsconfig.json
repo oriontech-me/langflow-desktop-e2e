@@ -6,7 +6,7 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node", "mocha", "@wdio/globals/types", "@wdio/tauri-service"]
+    "types": ["node", "mocha", "@wdio/globals/types"]
   },
   "include": ["wdio.conf.ts", "test/**/*.ts"]
 }
