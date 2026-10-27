@@ -1,11 +1,19 @@
 import { $, expect } from '@wdio/globals';
 
-// Selectors come from langflow-desktop: src/frontend/src/customization/pages/
-// (TermsAgreementPage, EmailRegistrationPage) and components/custom-empty-page.tsx.
+// First launch on a clean machine: Terms → email registration → backend install → main page.
+// The steps share one app instance and run in order; each `it` starts where the previous one ended.
+// Selectors and copy come from langflow-desktop: src/frontend/src/customization/pages/
+// (TermsAgreementPage, EmailRegistrationPage) and customization/components/custom-empty-page.tsx.
 const sel = {
   termsBody: '[data-testid="terms-agreement-body"]',
+  termsCopyright: '[data-testid="terms-copyright"]',
   termsAgree: '[data-testid="terms-agree-button"]',
+  termsDisagree: '[data-testid="terms-disagree-button"]',
+  termsDeclinedNotice: '[data-testid="terms-declined-notice"]',
+  termsReview: '[data-testid="terms-review-button"]',
+  termsQuit: '[data-testid="terms-quit-button"]',
   registrationCard: '[data-testid="registration-card"]',
+  emailPurpose: '[data-testid="email-purpose"]',
   emailInput: '[data-testid="email-input-field"]',
   emailConsent: '[data-testid="telemetry-consent-checkbox"]',
   usageConsent: '[data-testid="usage-consent-checkbox"]',
@@ -13,38 +21,95 @@ const sel = {
   mainPageTitle: '[data-testid="mainpage_title"]',
 };
 
+const COPYRIGHT = '© Copyright IBM Corp. 2025, 2026';
+const MSG_EMAIL_MISSING = 'Enter your email address';
+const MSG_EMAIL_INVALID = 'Enter a valid email address';
+
 // Placeholder domain: the registration must never reach a real inbox.
 const E2E_EMAIL = 'langflow-desktop-e2e@example.com';
 
-// Waiting for the dashboard covers the uv/Python/Langflow install on a clean machine.
+// Waiting for the main page covers the uv/Python/Langflow install on a clean machine.
 const BACKEND_READY_TIMEOUT = 10 * 60_000;
 
-async function uncheck(selector: string) {
-  const box = $(selector);
-  if (!(await box.isExisting())) return;
-  if ((await box.getAttribute('data-state')) === 'checked') await box.click();
+const byText = (text: string) => $(`//*[normalize-space(text())="${text}"]`);
+
+async function backendStatus(): Promise<number> {
+  try {
+    return (await fetch('http://localhost:7860/health')).status;
+  } catch {
+    return -1;
+  }
 }
 
 describe('First boot on a clean machine @smoke', () => {
-  it('shows the terms agreement and accepts it', async () => {
-    await expect($(sel.termsBody)).toBeDisplayed();
-    await $(sel.termsAgree).click();
+  describe('Terms agreement', () => {
+    it('shows the terms text and the IBM copyright', async () => {
+      await expect($(sel.termsBody)).toBeDisplayed();
+      await expect($(sel.termsBody)).not.toHaveText('');
+      await expect($(sel.termsCopyright)).toHaveText(COPYRIGHT);
+      await expect($(sel.termsAgree)).toBeEnabled();
+    });
+
+    it('declining keeps the app open, without access, and installs nothing', async () => {
+      await $(sel.termsDisagree).click();
+
+      await expect($(sel.termsDeclinedNotice)).toBeDisplayed();
+      await expect($(sel.termsBody)).not.toBeExisting();
+      await expect($(sel.termsAgree)).not.toBeExisting();
+      await expect($(sel.termsQuit)).toBeDisplayed();
+      await expect($(sel.termsReview)).toBeDisplayed();
+      expect(await backendStatus()).toBe(-1);
+    });
+
+    it('reviewing the terms again brings back the text and the Agree button', async () => {
+      await $(sel.termsReview).click();
+
+      await expect($(sel.termsBody)).toBeDisplayed();
+      await expect($(sel.termsDeclinedNotice)).not.toBeExisting();
+      await expect($(sel.termsAgree)).toBeEnabled();
+    });
+
+    it('agreeing moves on to the email registration', async () => {
+      await $(sel.termsAgree).click();
+
+      await expect($(sel.registrationCard)).toBeDisplayed();
+    });
   });
 
-  it('registers with an email without sharing data', async () => {
-    await expect($(sel.registrationCard)).toBeDisplayed();
-    await $(sel.emailInput).setValue(E2E_EMAIL);
-    // CI runs must not send telemetry or share the test email.
-    await uncheck(sel.emailConsent);
-    await uncheck(sel.usageConsent);
-    await $(sel.continue).click();
+  describe('Email registration', () => {
+    it('explains what the email is for and leaves both data-sharing consents unchecked', async () => {
+      await expect($(sel.emailPurpose)).toHaveText(/does not create an account/);
+      await expect($(sel.emailConsent)).toHaveAttribute('data-state', 'unchecked');
+      await expect($(sel.usageConsent)).toHaveAttribute('data-state', 'unchecked');
+    });
+
+    it('requires an email address', async () => {
+      await $(sel.continue).click();
+
+      await expect(byText(MSG_EMAIL_MISSING)).toBeDisplayed();
+      await expect($(sel.registrationCard)).toBeDisplayed();
+    });
+
+    it('rejects an invalid email address', async () => {
+      await $(sel.emailInput).setValue('not-an-email');
+      await $(sel.continue).click();
+
+      await expect(byText(MSG_EMAIL_INVALID)).toBeDisplayed();
+      await expect($(sel.registrationCard)).toBeDisplayed();
+    });
+
+    it('accepts a valid email without sharing data and starts the setup', async () => {
+      await $(sel.emailInput).setValue(E2E_EMAIL);
+      await $(sel.continue).click();
+
+      await expect($(sel.registrationCard)).not.toBeDisplayed();
+    });
   });
 
-  it('starts the backend and lands on the main page', async () => {
-    await $(sel.mainPageTitle).waitForDisplayed({ timeout: BACKEND_READY_TIMEOUT });
-
-    // The runner shares the machine with the app, so hit the backend directly (no webview CORS).
-    const health = await fetch('http://localhost:7860/health');
-    expect(health.status).toBe(200);
+  describe('Setup and first start', () => {
+    it('installs and starts the backend, then lands on the main page', async () => {
+      await $(sel.mainPageTitle).waitForDisplayed({ timeout: BACKEND_READY_TIMEOUT });
+      expect(await backendStatus()).toBe(200);
+    });
   });
 });
