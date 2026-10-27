@@ -1,0 +1,101 @@
+name: Langflow Desktop E2E (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      desktop_branch:
+        description: 'langflow-desktop branch whose latest "Build Unsigned" MSI is tested'
+        required: false
+        default: 'release-1.13.0'
+      desktop_run_id:
+        description: 'Specific "Build Unsigned" run id (overrides desktop_branch)'
+        required: false
+        default: ''
+  # Manual only for now: Windows minutes count 2x on the free plan. Re-enable once the suite is stable:
+  # schedule:
+  #   - cron: '0 9 * * 1-5'  # 06:00 BRT, Mon–Fri
+
+concurrency:
+  group: desktop-e2e-windows
+  cancel-in-progress: false
+
+env:
+  DESKTOP_REPO: langflow-ai/langflow-desktop
+  DESKTOP_WORKFLOW: pr-build.yml
+  MSI_ARTIFACT: langflow-windows-msi
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve Build Unsigned run
+        id: build
+        env:
+          # Fine-grained PAT with Actions: read on langflow-ai/langflow-desktop
+          GH_TOKEN: ${{ secrets.LANGFLOW_DESKTOP_TOKEN }}
+          RUN_ID: ${{ inputs.desktop_run_id }}
+          BRANCH: ${{ inputs.desktop_branch || 'release-1.13.0' }}
+        run: |
+          if (-not $env:RUN_ID) {
+            $env:RUN_ID = gh run list -R $env:DESKTOP_REPO -w $env:DESKTOP_WORKFLOW -b $env:BRANCH `
+              -s success -L 1 --json databaseId --jq '.[0].databaseId'
+          }
+          if (-not $env:RUN_ID) { throw "No successful Build Unsigned run found for $env:BRANCH" }
+          "run_id=$env:RUN_ID" >> $env:GITHUB_OUTPUT
+          "Testing MSI from https://github.com/$env:DESKTOP_REPO/actions/runs/$env:RUN_ID" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Download MSI
+        env:
+          GH_TOKEN: ${{ secrets.LANGFLOW_DESKTOP_TOKEN }}
+        run: gh run download ${{ steps.build.outputs.run_id }} -R $env:DESKTOP_REPO -n $env:MSI_ARTIFACT -D artifacts
+
+      - name: Install Langflow Desktop
+        run: |
+          $msi = Get-ChildItem artifacts -Filter *.msi | Select-Object -First 1
+          if (-not $msi) { throw "No .msi in the $env:MSI_ARTIFACT artifact" }
+          $exe = ./scripts/install-langflow-desktop.ps1 -MsiPath $msi.FullName
+          "LANGFLOW_DESKTOP_EXE=$exe" >> $env:GITHUB_ENV
+          "Installed: ``$($msi.Name)`` → ``$exe``" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Cache tauri-driver
+        id: tauri-driver-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/tauri-driver.exe
+          key: tauri-driver-${{ runner.os }}-v1
+
+      - name: Install tauri-driver
+        if: steps.tauri-driver-cache.outputs.cache-hit != 'true'
+        run: cargo install tauri-driver --locked
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run E2E
+        run: npm test
+
+      - name: Collect Langflow Desktop logs
+        if: always()
+        run: |
+          $dest = 'test-results/langflow-home'
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Get-ChildItem "$HOME/.langflow" -Recurse -Include *.log -ErrorAction SilentlyContinue |
+            Copy-Item -Destination $dest -ErrorAction SilentlyContinue
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-e2e-windows-${{ github.run_id }}
+          path: test-results/
+          retention-days: 14
