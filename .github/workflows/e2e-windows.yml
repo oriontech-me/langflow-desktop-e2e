@@ -84,12 +84,19 @@ jobs:
       - name: Run E2E
         run: npm test
 
+      # Runs after the tests so a force-killed instance can't leave crash-recovery state behind for them.
+      - name: Diagnose app launch (no WebDriver)
+        if: failure()
+        run: ./scripts/diagnose-launch.ps1 -ExePath $env:LANGFLOW_DESKTOP_EXE
+
       - name: Collect Langflow Desktop logs
         if: always()
         run: |
-          $dest = 'test-results/langflow-home'
+          $dest = 'test-results/app-logs'
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          Get-ChildItem "$HOME/.langflow" -Recurse -Include *.log -ErrorAction SilentlyContinue |
+          # tauri-plugin-log writes to %LOCALAPPDATA%\<identifier>\logs; the backend writes under ~/.langflow
+          @((Join-Path $env:LOCALAPPDATA 'com.LangflowDesktop\logs'), "$HOME/.langflow") |
+            ForEach-Object { Get-ChildItem $_ -Recurse -Include *.log -ErrorAction SilentlyContinue } |
             Copy-Item -Destination $dest -ErrorAction SilentlyContinue
 
       - name: Upload results

@@ -24,7 +24,8 @@ export const config: WebdriverIO.Config = {
     [
       '@wdio/tauri-service',
       {
-        driverProvider: 'official',
+        // 'official' is deprecated in favour of 'external' (same tauri-driver behaviour).
+        driverProvider: 'external',
         appBinaryPath: appPath,
         autoDownloadEdgeDriver: true,
         // First boot installs uv + Python + Langflow into ~/.langflow before the UI is usable.
@@ -45,6 +46,8 @@ export const config: WebdriverIO.Config = {
   ],
 
   logLevel: 'info',
+  // Each failed session attempt relaunches the app and waits ~60s; retrying only hides the real error.
+  connectionRetryCount: 0,
   outputDir: path.join(outputDir, 'logs'),
   waitforTimeout: 30_000,
 
