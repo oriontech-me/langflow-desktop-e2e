@@ -71,6 +71,8 @@ export const config: WebdriverIO.Config = {
     {
       browserName: 'webview2',
       'ms:edgeOptions': { debuggerAddress: `127.0.0.1:${DEBUG_PORT}` },
+      // When attaching, msedgedriver's BiDi mapper only exposes its own about:blank tab, never the app page.
+      'wdio:enforceWebDriverClassic': true,
     },
   ],
 
@@ -93,6 +95,15 @@ export const config: WebdriverIO.Config = {
       stdio: 'ignore',
     });
     await waitForHttp(`http://127.0.0.1:${DEBUG_PORT}/json/version`, 'Langflow Desktop WebView2 debug port', 60_000);
+  },
+
+  // The attached session may start on a non-app target; switch to the window serving the Langflow UI.
+  before: async () => {
+    for (const handle of await browser.getWindowHandles()) {
+      await browser.switchToWindow(handle);
+      if (!(await browser.getUrl()).startsWith('about:')) return;
+    }
+    throw new Error('No WebView2 target is serving the Langflow Desktop UI');
   },
 
   onComplete: () => {
