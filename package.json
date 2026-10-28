@@ -2,11 +2,12 @@
   "name": "langflow-desktop-e2e",
   "version": "0.1.0",
   "private": true,
-  "description": "E2E tests for IBM Langflow Desktop (Windows) with WebdriverIO + tauri-driver",
+  "description": "E2E tests for IBM Langflow Desktop (Windows and macOS) with WebdriverIO",
   "type": "module",
   "scripts": {
     "test": "wdio run ./wdio.conf.ts",
     "test:smoke": "wdio run ./wdio.conf.ts --mochaOpts.grep @smoke",
+    "test:mac": "wdio run ./wdio.mac.conf.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

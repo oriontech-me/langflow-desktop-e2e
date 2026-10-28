@@ -1,10 +1,11 @@
-# Langflow Desktop — E2E (Windows)
+# Langflow Desktop — E2E (Windows e macOS)
 
-Testes end-to-end do **IBM Langflow Desktop** com [WebdriverIO](https://webdriver.io), rodando no
-**MSI de QA como ele é** — sem plugin, sem build especial, sem mudança no app.
+Testes end-to-end do **IBM Langflow Desktop** com [WebdriverIO](https://webdriver.io). As mesmas specs rodam nos dois sistemas:
 
-> macOS não é coberto aqui: lá o Tauri só é automatizável com um plugin compilado no app
-> (`tauri-plugin-wdio-webdriver`). Linux não tem build do Desktop.
+- **Windows**: no **MSI de QA como ele é** — sem plugin, sem build especial, sem mudança no app. Roda no CI (GitHub Actions).
+- **macOS**: num DMG de QA com o servidor WebDriver embutido (`enable_webdriver`). Por enquanto, só local — veja [macOS](#macos).
+
+> Linux não tem build do Desktop.
 
 ## Como funciona
 
@@ -71,13 +72,48 @@ npm run test:smoke
 
 Feche o Langflow Desktop antes de rodar: o WebdriverIO abre a própria instância.
 
+## macOS
+
+No Mac o WebView (WKWebView) não tem porta de depuração, então o app precisa trazer o próprio servidor WebDriver:
+o plugin `tauri-plugin-wdio-webdriver`, que o `langflow-desktop` compila só quando o workflow **"Build Unsigned"**
+é disparado com **`enable_webdriver` = true** (feature `webdriver`; nunca entra em build de produção).
+O app abre o servidor em `127.0.0.1:4445` e o WebdriverIO conversa direto com ele — sem `msedgedriver`.
+
+```bash
+# 1. uma vez por build: baixa o DMG de um "Build Unsigned" com enable_webdriver e extrai o app para .cache/app
+gh run download <RUN_ID> -R langflow-ai/langflow-desktop -n langflow-macos-arm-dmg -D .cache/dmg
+scripts/install-langflow-desktop-macos.sh .cache/dmg/*.dmg
+
+# 2. antes de cada execução: volta ao "primeiro boot" (APAGA os dados do Desktop desta máquina)
+scripts/reset-langflow-desktop-macos.sh
+
+# 3. roda
+npm run test:mac
+npx wdio run ./wdio.mac.conf.ts --mochaOpts.grep "(Terms agreement|Email registration)"   # só Termos + cadastro
+```
+
+⚠️ No macOS o Desktop guarda tudo em **`~/.langflow`** (venv, uv, `data/database.db`) além de `~/Library/*/com.LangflowDesktop`
+— o reset apaga esses caminhos. Pastas `~/Library/*/langflow` (sem `com.`) são de um Langflow de dev e ficam intactas.
+A porta **7860** precisa estar livre (pare um Langflow de dev antes); o run aborta se estiver ocupada.
+
+Diferenças que importam ao escrever testes:
+
+- Menus e botões de modal do Langflow (Radix) **não reagem ao clique** do WebDriver no WKWebView — o elemento só ganha
+  foco. Ative pelo teclado: foco + `browser.keys('Enter')`. Funciona igual no Windows.
+- O executável do bundle é `Langflow .app/Contents/MacOS/Langflow ` (com espaço no fim); o `wdio.mac.conf.ts` lê o nome do `Info.plist`.
+- Downloads (exportar flow etc.) abrem a janela **nativa** de "Salvar como", invisível ao WebDriver, nos dois sistemas.
+  Ainda não há como testá-los ponta a ponta.
+
 ## Estrutura
 
 | Caminho | O quê |
 |---|---|
-| `wdio.conf.ts` | Abre o app com a porta de depuração, sobe o `msedgedriver` (versão do WebView2 instalado) e conecta |
+| `wdio.conf.ts` | Windows: abre o app com a porta de depuração, sobe o `msedgedriver` (versão do WebView2 instalado) e conecta |
+| `wdio.mac.conf.ts` | macOS: abre o app com o servidor WebDriver embutido e conecta nele |
 | `test/specs/first-boot.spec.ts` | Primeiro boot: Termos (aceitar/recusar/revisar) → cadastro de e-mail (validações, consentimentos) → instalação → tela principal |
-| `scripts/install-langflow-desktop.ps1` | Instala o MSI silenciosamente e imprime o caminho do executável |
+| `scripts/install-langflow-desktop.ps1` | Windows: instala o MSI silenciosamente e imprime o caminho do executável |
+| `scripts/install-langflow-desktop-macos.sh` | macOS: extrai o `.app` do DMG para `.cache/app` (não mexe em `/Applications`) |
+| `scripts/reset-langflow-desktop-macos.sh` | macOS: apaga os dados do Desktop para o próximo boot ser um primeiro boot |
 | `.github/workflows/e2e-windows.yml` | Pipeline do CI |
 
 ## Escrevendo testes

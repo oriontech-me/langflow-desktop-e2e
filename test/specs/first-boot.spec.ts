@@ -114,7 +114,9 @@ describe('First boot on a clean machine @smoke', () => {
       await browser.waitUntil(
         async () => {
           if (await $(sel.mainPageTitle).isDisplayed()) return true;
-          const stage = (await $('body').getText()).trim().split('\n')[0] ?? '';
+          // innerText skips the hidden <noscript> fallback, which WebKit's getText returns as the first line.
+          const text = await browser.execute(() => document.body.innerText);
+          const stage = text.trim().split('\n')[0] ?? '';
           if (stage !== lastStage) {
             console.log(`[setup +${Math.round((Date.now() - started) / 1000)}s] ${stage}`);
             lastStage = stage;
