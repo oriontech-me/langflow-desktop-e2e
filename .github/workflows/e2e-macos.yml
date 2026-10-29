@@ -4,14 +4,14 @@ name: Langflow Desktop E2E (macOS)
 on:
   workflow_dispatch:
     inputs:
-      desktop_branch:
-        description: 'langflow-desktop branch whose latest WebDriver-enabled "Build Unsigned" DMG is tested'
-        required: false
-        default: 'release-1.14.0'
-      desktop_run_id:
-        description: 'Specific "Build Unsigned" run id, built with enable_webdriver=true (overrides desktop_branch)'
+      build:
+        description: 'Build to test: link or id of a "Build Unsigned" run built with enable_webdriver (list: "Langflow Desktop builds" workflow). Empty = latest on the branch below'
         required: false
         default: ''
+      desktop_branch:
+        description: 'langflow-desktop branch used when "build" is empty'
+        required: false
+        default: 'release-1.14.0'
 
 concurrency:
   group: desktop-e2e-macos
@@ -19,9 +19,7 @@ concurrency:
 
 env:
   DESKTOP_REPO: langflow-ai/langflow-desktop
-  DESKTOP_WORKFLOW: pr-build.yml
   DMG_ARTIFACT: langflow-macos-arm-dmg
-  DMG_JOB: macOS ARM (DMG)
 
 jobs:
   e2e:
@@ -31,36 +29,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Only builds dispatched with enable_webdriver=true embed the WebDriver server the tests talk to,
-      # and the run's inputs aren't exposed by the API: read the DMG job's log for the flag instead.
+      # Only builds dispatched with enable_webdriver=true embed the WebDriver server the tests talk to.
       - name: Resolve WebDriver-enabled Build Unsigned run
         id: build
         env:
           GH_TOKEN: ${{ secrets.LANGFLOW_DESKTOP_TOKEN }}
-          RUN_ID: ${{ inputs.desktop_run_id }}
+          BUILD: ${{ inputs.build }}
           BRANCH: ${{ inputs.desktop_branch || 'release-1.14.0' }}
         run: |
-          has_webdriver() {
-            local job
-            job=$(gh api "repos/$DESKTOP_REPO/actions/runs/$1/jobs" --paginate \
-              --jq ".jobs[] | select(.name == \"$DMG_JOB\" and .conclusion == \"success\") | .id")
-            # curl, not gh api: recent gh refuses to print a response holding terminal escape sequences,
-            # and build logs are full of ANSI colours.
-            [ -n "$job" ] && curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
-              "https://api.github.com/repos/$DESKTOP_REPO/actions/jobs/$job/logs" | grep -F 'ENABLE_WEBDRIVER: true' >/dev/null
-          }
-
-          if [ -n "$RUN_ID" ]; then
-            has_webdriver "$RUN_ID" || { echo "::error::Run $RUN_ID has no '$DMG_JOB' built with enable_webdriver=true"; exit 1; }
-          else
-            for id in $(gh run list -R "$DESKTOP_REPO" -w "$DESKTOP_WORKFLOW" -b "$BRANCH" -s success -L 20 \
-                          --json databaseId --jq '.[].databaseId'); do
-              if has_webdriver "$id"; then RUN_ID=$id; break; fi
-            done
-            [ -n "$RUN_ID" ] || { echo "::error::No recent Build Unsigned on $BRANCH was built with enable_webdriver=true. Dispatch one with that input checked."; exit 1; }
-          fi
-          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "Testing DMG from https://github.com/$DESKTOP_REPO/actions/runs/$RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          run_id=$(scripts/desktop-builds.sh resolve "$DMG_ARTIFACT" "$BRANCH" "$BUILD" webdriver)
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Testing DMG from https://github.com/$DESKTOP_REPO/actions/runs/$run_id" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Download DMG
         env:

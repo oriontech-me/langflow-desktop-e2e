@@ -39,8 +39,11 @@ langflow-ai/langflow-desktop          este repo (GitHub Actions, windows-latest)
    permissão **Actions: Read-only**. Um admin da org `langflow-ai` precisa aprovar.
 2. Salve como secret **`LANGFLOW_DESKTOP_TOKEN`** neste repositório (Settings → Secrets → Actions).
 3. Rode o workflow **Langflow Desktop E2E (Windows)** em *Actions → Run workflow*:
-   - `desktop_branch`: branch do Desktop cujo último build com sucesso será testado (padrão `release-1.13.0`);
-   - `desktop_run_id`: opcional, para testar um build específico.
+   - `build`: **qual build testar** — cole o link do run do "Build Unsigned" (ou só o número). Para ver os builds
+     disponíveis, rode antes o workflow **Langflow Desktop builds** (roda em Linux, segundos, não gasta minutos de
+     Windows/macOS): ele mostra no *Summary* uma tabela com os builds que ainda têm instalador, por sistema;
+   - `desktop_branch`: usado só com `build` vazio — testa o build mais recente dessa branch (padrão `release-1.13.0`).
+   Se o build escolhido já expirou (ou, no Mac, não tem WebDriver), o run falha logo no primeiro passo dizendo isso.
    Por enquanto só roda manualmente: no plano free os minutos de Windows contam em dobro. O agendamento
    (seg–sex 06:00 BRT) está comentado no workflow para ligar quando a suíte estiver estável.
 4. Resultado: aba *Summary* do run + artefato `desktop-e2e-windows-<id>` com logs do WebdriverIO,
@@ -80,8 +83,9 @@ o plugin `tauri-plugin-wdio-webdriver`, que o `langflow-desktop` compila só qua
 O app abre o servidor em `127.0.0.1:4445` e o WebdriverIO conversa direto com ele — sem `msedgedriver`.
 
 **CI:** workflow **Langflow Desktop E2E (macOS)** (*Actions → Run workflow*), só manual — minuto de macOS conta 10x
-(um run leva ~4 min, ~40 min da cota). Ele procura sozinho o "Build Unsigned" mais recente da branch (padrão `release-1.14.0`) que foi
-compilado com `enable_webdriver` (confere o log do job do DMG); se não houver, falha pedindo para disparar um.
+(um run leva ~4 min, ~40 min da cota). Escolha o build no campo `build` (link ou número do run, como no Windows) ou deixe vazio para
+o mais recente da branch (padrão `release-1.14.0`) compilado com `enable_webdriver` (confere o log do job do DMG). Na
+tabela do workflow **Langflow Desktop builds**, só os DMGs marcados "with WebDriver" servem.
 
 ```bash
 # 1. uma vez por build: baixa o DMG de um "Build Unsigned" com enable_webdriver e extrai o app para .cache/app
@@ -129,8 +133,8 @@ test/
     backend.ts               API do backend: status, criar/apagar flow (massa e verificação)
   data/
     test-data.ts             dados de entrada (e-mail de teste) e timeouts
-scripts/                     instalar o MSI/DMG, resetar os dados do Desktop no Mac
-.github/workflows/           CI Windows e macOS
+scripts/                     listar/escolher builds, instalar o MSI/DMG, resetar os dados do Desktop no Mac
+.github/workflows/           CI Windows e macOS + "Langflow Desktop builds" (lista os builds disponíveis)
 ```
 
 ## Escrevendo testes

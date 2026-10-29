@@ -3,14 +3,14 @@ name: Langflow Desktop E2E (Windows)
 on:
   workflow_dispatch:
     inputs:
-      desktop_branch:
-        description: 'langflow-desktop branch whose latest "Build Unsigned" MSI is tested'
-        required: false
-        default: 'release-1.13.0'
-      desktop_run_id:
-        description: 'Specific "Build Unsigned" run id (overrides desktop_branch)'
+      build:
+        description: 'Build to test: link or id of a "Build Unsigned" run (list: "Langflow Desktop builds" workflow). Empty = latest on the branch below'
         required: false
         default: ''
+      desktop_branch:
+        description: 'langflow-desktop branch used when "build" is empty'
+        required: false
+        default: 'release-1.13.0'
   # Manual only for now: Windows minutes count 2x on the free plan. Re-enable once the suite is stable:
   # schedule:
   #   - cron: '0 9 * * 1-5'  # 06:00 BRT, Mon–Fri
@@ -21,7 +21,6 @@ concurrency:
 
 env:
   DESKTOP_REPO: langflow-ai/langflow-desktop
-  DESKTOP_WORKFLOW: pr-build.yml
   MSI_ARTIFACT: langflow-windows-msi
 
 jobs:
@@ -36,19 +35,16 @@ jobs:
 
       - name: Resolve Build Unsigned run
         id: build
+        shell: bash
         env:
           # Fine-grained PAT with Actions: read on langflow-ai/langflow-desktop
           GH_TOKEN: ${{ secrets.LANGFLOW_DESKTOP_TOKEN }}
-          RUN_ID: ${{ inputs.desktop_run_id }}
+          BUILD: ${{ inputs.build }}
           BRANCH: ${{ inputs.desktop_branch || 'release-1.13.0' }}
         run: |
-          if (-not $env:RUN_ID) {
-            $env:RUN_ID = gh run list -R $env:DESKTOP_REPO -w $env:DESKTOP_WORKFLOW -b $env:BRANCH `
-              -s success -L 1 --json databaseId --jq '.[0].databaseId'
-          }
-          if (-not $env:RUN_ID) { throw "No successful Build Unsigned run found for $env:BRANCH" }
-          "run_id=$env:RUN_ID" >> $env:GITHUB_OUTPUT
-          "Testing MSI from https://github.com/$env:DESKTOP_REPO/actions/runs/$env:RUN_ID" >> $env:GITHUB_STEP_SUMMARY
+          run_id=$(scripts/desktop-builds.sh resolve "$MSI_ARTIFACT" "$BRANCH" "$BUILD")
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Testing MSI from https://github.com/$DESKTOP_REPO/actions/runs/$run_id" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Download MSI
         env:
