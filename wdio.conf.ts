@@ -2,6 +2,7 @@ import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { start as startEdgeDriver } from 'edgedriver';
+import { sharedConfig, waitForHttp } from './wdio.shared.conf.js';
 
 // Path to the installed "Langflow .exe". CI resolves it after installing the MSI
 // (see scripts/install-langflow-desktop.ps1); locally, export it yourself.
@@ -14,7 +15,6 @@ if (!appPath || !fs.existsSync(appPath)) {
 
 const DEBUG_PORT = 9222;
 const DRIVER_PORT = 9515;
-const outputDir = path.resolve('./test-results');
 
 // We launch the app ourselves with WebView2 remote debugging on and let msedgedriver attach to it
 // (debuggerAddress) instead of letting msedgedriver/tauri-driver launch it. WebView2 ignores
@@ -37,19 +37,6 @@ function webview2Version(): string | undefined {
   }
 }
 
-async function waitForHttp(url: string, what: string, timeoutMs: number) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      if ((await fetch(url)).ok) return;
-    } catch {
-      // not up yet
-    }
-    await new Promise((r) => setTimeout(r, 1_000));
-  }
-  throw new Error(`${what} not reachable at ${url} after ${timeoutMs / 1000}s`);
-}
-
 function killTree(pid: number | undefined) {
   if (!pid) return;
   try {
@@ -60,12 +47,7 @@ function killTree(pid: number | undefined) {
 }
 
 export const config: WebdriverIO.Config = {
-  runner: 'local',
-  specs: ['./test/specs/**/*.spec.ts'],
-  // One app instance shared by all specs: the backend binds the fixed port 7860.
-  maxInstances: 1,
-
-  hostname: '127.0.0.1',
+  ...sharedConfig,
   port: DRIVER_PORT,
   capabilities: [
     {
@@ -75,15 +57,6 @@ export const config: WebdriverIO.Config = {
       'wdio:enforceWebDriverClassic': true,
     },
   ],
-
-  logLevel: 'info',
-  outputDir: path.join(outputDir, 'logs'),
-  waitforTimeout: 30_000,
-  connectionRetryCount: 0,
-
-  framework: 'mocha',
-  mochaOpts: { ui: 'bdd', timeout: 15 * 60_000 },
-  reporters: ['spec'],
 
   onPrepare: async () => {
     const version = webview2Version();
@@ -109,13 +82,5 @@ export const config: WebdriverIO.Config = {
   onComplete: () => {
     killTree(app?.pid);
     killTree(driver?.pid);
-  },
-
-  afterTest: async (test, _context, { passed }) => {
-    if (passed) return;
-    const shotsDir = path.join(outputDir, 'screenshots');
-    fs.mkdirSync(shotsDir, { recursive: true });
-    const name = `${test.parent} - ${test.title}`.replace(/[^\w.-]+/g, '_');
-    await browser.saveScreenshot(path.join(shotsDir, `${name}.png`));
   },
 };

@@ -110,24 +110,46 @@ Diferenças que importam ao escrever testes:
 
 ## Estrutura
 
-| Caminho | O quê |
-|---|---|
-| `wdio.conf.ts` | Windows: abre o app com a porta de depuração, sobe o `msedgedriver` (versão do WebView2 instalado) e conecta |
-| `wdio.mac.conf.ts` | macOS: abre o app com o servidor WebDriver embutido e conecta nele |
-| `test/specs/first-boot.spec.ts` | Primeiro boot: Termos (aceitar/recusar/revisar) → cadastro de e-mail (validações, consentimentos) → instalação → tela principal |
-| `scripts/install-langflow-desktop.ps1` | Windows: instala o MSI silenciosamente e imprime o caminho do executável |
-| `scripts/install-langflow-desktop-macos.sh` | macOS: extrai o `.app` do DMG para `.cache/app` (não mexe em `/Applications`) |
-| `scripts/reset-langflow-desktop-macos.sh` | macOS: apaga os dados do Desktop para o próximo boot ser um primeiro boot |
-| `.github/workflows/e2e-windows.yml` | Pipeline do CI (Windows) |
-| `.github/workflows/e2e-macos.yml` | Pipeline do CI (macOS) |
+```
+wdio.shared.conf.ts          config comum aos dois sistemas (specs, mocha, timeouts, screenshot de falha)
+wdio.conf.ts                 Windows: abre o app com a porta de depuração, sobe o msedgedriver e conecta
+wdio.mac.conf.ts             macOS: abre o app com o servidor WebDriver embutido e conecta nele
+test/
+  specs/                     cenários (describe/it) e asserções — só aqui tem expect
+    first-boot.spec.ts       Termos → cadastro de e-mail → instalação → tela principal
+  pageobjects/               uma classe por tela: como achar os elementos + ações do usuário
+    page.ts                  base: byTestId, byText, pressWithKeyboard (Radix)
+    terms.page.ts            Termos de uso
+    registration.page.ts     cadastro de e-mail
+    setup.page.ts            tela de instalação (espera a tela principal logando cada etapa)
+    main.page.ts             tela principal / cards de flow
+    components/              pedaços reutilizáveis (modais, menus)
+      export-flow.modal.ts
+  utils/
+    backend.ts               API do backend: status, criar/apagar flow (massa e verificação)
+  data/
+    test-data.ts             dados de entrada (e-mail de teste) e timeouts
+scripts/                     instalar o MSI/DMG, resetar os dados do Desktop no Mac
+.github/workflows/           CI Windows e macOS
+```
 
 ## Escrevendo testes
 
-- Use os `data-testid` do frontend (`langflow-ai/langflow-desktop`, `src/frontend/src/`). As telas próprias do Desktop
-  ficam em `src/frontend/src/customization/`; o resto é o frontend do Langflow OSS, os mesmos ids usados no `langflow-e2e`.
-- Seletores CSS normais funcionam: `$('[data-testid="..."]')`. Para texto sem `data-testid`, XPath:
-  `$('//*[normalize-space(text())="Texto"]')`.
-- Todas as specs compartilham **uma** instância do app, aberta no `onPrepare`, e rodam em sequência
+Seguimos o [padrão Page Object do WebdriverIO](https://webdriver.io/docs/pageobjects) e as
+[boas práticas](https://webdriver.io/docs/bestpractices) dele:
+
+- **Page object = seletores + ações, sem `expect`.** Cada tela é uma classe que estende `Page`, com um getter por
+  elemento (`get agreeButton() { return this.byTestId('terms-agree-button'); }`) e métodos para o que o usuário faz
+  (`agree()`, `submit(email)`). O arquivo exporta **uma instância** (`export default new TermsPage()`), sem estado.
+- **Spec = cenário + asserções.** A spec chama as ações e verifica com `await expect(Page.elemento).toBe...()`.
+  Textos esperados (mensagens de erro, copyright) ficam como constantes no topo da spec.
+- **Seletores:** `data-testid` primeiro (`langflow-ai/langflow-desktop`, `src/frontend/src/`; telas próprias do Desktop
+  em `src/frontend/src/customization/`, o resto é o frontend do Langflow OSS, mesmos ids do `langflow-e2e`).
+  Sem test id: `role`/`id` estável; texto (`byText`) só para mensagens. Nada de classe CSS ou posição.
+- **Esperas:** os `expect` do WebdriverIO já esperam (até `waitforTimeout`, 30 s). Não use `browser.pause`; para algo
+  demorado use `waitUntil`/`waitForDisplayed` com timeout de `test-data.ts`.
+- **Massa e verificação pela API** (`test/utils/backend.ts`): o runner roda na mesma máquina do app, então a spec cria
+  o que precisa (ex.: `createFlow`) e apaga no `after`. Use a UI só para o que o teste está validando.
+- Todas as specs compartilham **uma** instância do app, aberta no `onPrepare`, e rodam em sequência por nome de arquivo
   (`maxInstances: 1`, porta fixa). O estado de uma spec é o ponto de partida da próxima.
-- O runner roda na mesma máquina do app: dá para chamar a API do backend direto de Node (`fetch('http://localhost:7860/...')`)
-  para preparar massa ou verificar estado.
+- Imports entre arquivos `.ts` usam extensão `.js` (`'../pageobjects/terms.page.js'`) — exigência do `module: NodeNext`.

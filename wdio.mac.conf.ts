@@ -2,6 +2,7 @@ import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SevereServiceError } from 'webdriverio';
+import { sharedConfig, waitForHttp } from './wdio.shared.conf.js';
 
 // macOS runs against a "Build Unsigned" DMG built with enable_webdriver=true: the app embeds
 // tauri-plugin-wdio-webdriver, a W3C WebDriver server, so WebdriverIO talks to the app directly
@@ -31,30 +32,11 @@ if (!appPath || !fs.existsSync(appPath)) {
 
 const DRIVER_PORT = 4445;
 const BACKEND_PORT = 7860;
-const outputDir = path.resolve('./test-results');
 
 let app: ChildProcess | undefined;
 
-async function waitForHttp(url: string, what: string, timeoutMs: number) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      if ((await fetch(url)).ok) return;
-    } catch {
-      // not up yet
-    }
-    await new Promise((r) => setTimeout(r, 1_000));
-  }
-  throw new Error(`${what} not reachable at ${url} after ${timeoutMs / 1000}s`);
-}
-
 export const config: WebdriverIO.Config = {
-  runner: 'local',
-  specs: ['./test/specs/**/*.spec.ts'],
-  // One app instance shared by all specs: the backend binds the fixed port 7860.
-  maxInstances: 1,
-
-  hostname: '127.0.0.1',
+  ...sharedConfig,
   port: DRIVER_PORT,
   capabilities: [
     {
@@ -63,15 +45,6 @@ export const config: WebdriverIO.Config = {
       'wdio:enforceWebDriverClassic': true,
     },
   ],
-
-  logLevel: 'info',
-  outputDir: path.join(outputDir, 'logs'),
-  waitforTimeout: 30_000,
-  connectionRetryCount: 0,
-
-  framework: 'mocha',
-  mochaOpts: { ui: 'bdd', timeout: 15 * 60_000 },
-  reporters: ['spec'],
 
   onPrepare: async () => {
     // The Desktop backend binds the fixed port 7860. Anything already there (a dev Langflow, a Docker
@@ -104,13 +77,5 @@ export const config: WebdriverIO.Config = {
     } catch {
       // already gone
     }
-  },
-
-  afterTest: async (test, _context, { passed }) => {
-    if (passed) return;
-    const shotsDir = path.join(outputDir, 'screenshots');
-    fs.mkdirSync(shotsDir, { recursive: true });
-    const name = `${test.parent} - ${test.title}`.replace(/[^\w.-]+/g, '_');
-    await browser.saveScreenshot(path.join(shotsDir, `${name}.png`));
   },
 };
