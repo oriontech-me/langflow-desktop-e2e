@@ -41,7 +41,7 @@ langflow-ai/langflow-desktop          este repo (GitHub Actions, windows-latest)
 3. Rode o workflow **Langflow Desktop E2E (Windows)** em *Actions → Run workflow*:
    - `build`: **qual build testar** — cole o link do run do "Build Unsigned" (ou só o número). Para ver os builds
      disponíveis, rode antes o workflow **Langflow Desktop builds** (roda em Linux, segundos, não gasta minutos de
-     Windows/macOS): ele mostra no *Summary* uma tabela com os builds que ainda têm instalador, por sistema;
+     Windows/macOS): ele mostra no *Summary* uma tabela com os builds que ainda têm instalador, por sistema, e de qual PR cada um veio;
    - `desktop_branch`: usado só com `build` vazio — testa o build mais recente dessa branch (padrão `release-1.13.0`).
    Se o build escolhido já expirou (ou, no Mac, não tem WebDriver), o run falha logo no primeiro passo dizendo isso.
    Por enquanto só roda manualmente: no plano free os minutos de Windows contam em dobro. O agendamento

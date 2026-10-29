@@ -20,7 +20,8 @@ jobs:
             echo
             echo "Copy a build's link (or id) into the **build** input of *Langflow Desktop E2E (Windows)* or *(macOS)*."
             echo "macOS needs a DMG **with WebDriver** (\"Build Unsigned\" dispatched with \`enable_webdriver\`)."
-            echo "Installers expire 7 days after the build."
+            echo "Installers expire 7 days after the build. *Built from* shows the PR behind each build; builds"
+            echo "dispatched by hand on a branch without a PR (e.g. \`release-*\`) show that branch's last commit instead."
             echo
             scripts/desktop-builds.sh list
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"

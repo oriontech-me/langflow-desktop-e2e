@@ -4,6 +4,8 @@
 #
 #   desktop-builds.sh list [limit]
 #       Markdown table of the recent builds that still have a Windows MSI or a macOS DMG.
+#   desktop-builds.sh describe <run id>
+#       One markdown line: the build's branch, commit and the PR it was built from.
 #   desktop-builds.sh resolve <artifact> <branch> [build] [webdriver]
 #       Prints the run id to test. build: a run id or run URL; empty = latest build on <branch> with
 #       <artifact>. "webdriver" also requires the DMG to be built with enable_webdriver=true.
@@ -33,13 +35,27 @@ has_webdriver() {
     "https://api.github.com/repos/$REPO/actions/jobs/$job/logs" | grep -F 'ENABLE_WEBDRIVER: true' >/dev/null
 }
 
+# What a build was made from: "PR #N title" when a pull request triggered it (the run title is
+# "PR Build #N - title"); for a manual dispatch, the PR whose branch it built, if any, else the branch's last
+# commit. The PR lookup needs Pull requests: read on the token; without it, the commit is shown.
+origin() {
+  local branch=$1 title=$2 commit=$3 pr
+  if [[ $title =~ ^PR\ Build\ \#([0-9]+)\ -\ (.*)$ ]]; then
+    echo "[PR #${BASH_REMATCH[1]}](https://github.com/$REPO/pull/${BASH_REMATCH[1]}) ${BASH_REMATCH[2]}"
+    return
+  fi
+  pr=$(gh api "repos/$REPO/pulls?head=${REPO%%/*}:$branch&state=all&per_page=1" \
+         --jq '.[0] | select(.) | "[PR #\(.number)](\(.html_url)) \(.title)"' 2>/dev/null | tr -d '\r' || true)
+  echo "${pr:-no PR · last commit: $commit}"
+}
+
 list() {
-  echo "| Build | Branch @ commit | Created | Windows MSI | macOS DMG |"
-  echo "|---|---|---|---|---|"
-  gh run list -R "$REPO" -w "$WORKFLOW" -s success -L "${1:-30}" \
-    --json databaseId,headBranch,createdAt,headSha \
-    --jq '.[] | [.databaseId, .headBranch, .createdAt, .headSha[0:7]] | @tsv' | tr -d '\r' |
-    while IFS=$'\t' read -r id branch created sha; do
+  echo "| Build | Built from | Branch @ commit | Created | Windows MSI | macOS DMG |"
+  echo "|---|---|---|---|---|---|"
+  gh api "repos/$REPO/actions/workflows/$WORKFLOW/runs?status=success&per_page=${1:-30}" \
+    --jq '.workflow_runs[] | [.id, .head_branch, .created_at, .head_sha[0:7], .display_title,
+           (.head_commit.message | split("\n")[0])] | map(tostring | gsub("[\t|]"; " ")) | @tsv' | tr -d '\r' |
+    while IFS=$'\t' read -r id branch created sha title commit; do
       names=$(artifacts "$id")
       msi='—'
       dmg='—'
@@ -48,8 +64,18 @@ list() {
         if has_webdriver "$id"; then dmg='✅ with WebDriver'; else dmg='without WebDriver (not testable)'; fi
       fi
       [ "$msi$dmg" = '——' ] && continue
-      echo "| [$id](https://github.com/$REPO/actions/runs/$id) | \`$branch\` @ \`$sha\` | ${created%T*} | $msi | $dmg |"
+      echo "| [$id](https://github.com/$REPO/actions/runs/$id) | $(origin "$branch" "$title" "$commit") | \`$branch\` @ \`$sha\` | ${created%T*} | $msi | $dmg |"
     done
+}
+
+# One line for the E2E run's summary: which build is tested and what it was made from.
+describe() {
+  gh api "repos/$REPO/actions/runs/$1" \
+    --jq '[.head_branch, .display_title, (.head_commit.message | split("\n")[0]), .head_sha[0:7]] | map(tostring | gsub("[\t|]"; " ")) | @tsv' |
+    tr -d '\r' | {
+      IFS=$'\t' read -r branch title commit sha
+      echo "Build [$1](https://github.com/$REPO/actions/runs/$1) — \`$branch\` @ \`$sha\` — $(origin "$branch" "$title" "$commit")"
+    }
 }
 
 resolve() {
@@ -74,5 +100,6 @@ resolve() {
 case "${1:-}" in
   list) shift; list "$@" ;;
   resolve) shift; resolve "$@" ;;
-  *) echo "usage: $0 list [limit] | resolve <artifact> <branch> [build] [webdriver]" >&2; exit 2 ;;
+  describe) shift; describe "$@" ;;
+  *) echo "usage: $0 list [limit] | resolve <artifact> <branch> [build] [webdriver] | describe <run id>" >&2; exit 2 ;;
 esac

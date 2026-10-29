@@ -39,7 +39,7 @@ jobs:
         run: |
           run_id=$(scripts/desktop-builds.sh resolve "$DMG_ARTIFACT" "$BRANCH" "$BUILD" webdriver)
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-          echo "Testing DMG from https://github.com/$DESKTOP_REPO/actions/runs/$run_id" >> "$GITHUB_STEP_SUMMARY"
+          echo "Testing the DMG of $(scripts/desktop-builds.sh describe "$run_id")" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Download DMG
         env:

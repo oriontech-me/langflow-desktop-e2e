@@ -44,7 +44,7 @@ jobs:
         run: |
           run_id=$(scripts/desktop-builds.sh resolve "$MSI_ARTIFACT" "$BRANCH" "$BUILD")
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-          echo "Testing MSI from https://github.com/$DESKTOP_REPO/actions/runs/$run_id" >> "$GITHUB_STEP_SUMMARY"
+          echo "Testing the MSI of $(scripts/desktop-builds.sh describe "$run_id")" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Download MSI
         env:
