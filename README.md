@@ -3,7 +3,7 @@
 Testes end-to-end do **IBM Langflow Desktop** com [WebdriverIO](https://webdriver.io). As mesmas specs rodam nos dois sistemas:
 
 - **Windows**: no **MSI de QA como ele é** — sem plugin, sem build especial, sem mudança no app. Roda no CI (GitHub Actions).
-- **macOS**: num DMG de QA com o servidor WebDriver embutido (`enable_webdriver`). Por enquanto, só local — veja [macOS](#macos).
+- **macOS**: num DMG de QA com o servidor WebDriver embutido (`enable_webdriver`). Roda no CI e local — veja [macOS](#macos).
 
 > Linux não tem build do Desktop.
 
@@ -79,6 +79,10 @@ o plugin `tauri-plugin-wdio-webdriver`, que o `langflow-desktop` compila só qua
 é disparado com **`enable_webdriver` = true** (feature `webdriver`; nunca entra em build de produção).
 O app abre o servidor em `127.0.0.1:4445` e o WebdriverIO conversa direto com ele — sem `msedgedriver`.
 
+**CI:** workflow **Langflow Desktop E2E (macOS)** (*Actions → Run workflow*), só manual — minuto de macOS conta 10x
+(~150 min da cota por run). Ele procura sozinho o "Build Unsigned" mais recente da branch (padrão `release-1.14.0`) que foi
+compilado com `enable_webdriver` (confere o log do job do DMG); se não houver, falha pedindo para disparar um.
+
 ```bash
 # 1. uma vez por build: baixa o DMG de um "Build Unsigned" com enable_webdriver e extrai o app para .cache/app
 gh run download <RUN_ID> -R langflow-ai/langflow-desktop -n langflow-macos-arm-dmg -D .cache/dmg
@@ -114,7 +118,8 @@ Diferenças que importam ao escrever testes:
 | `scripts/install-langflow-desktop.ps1` | Windows: instala o MSI silenciosamente e imprime o caminho do executável |
 | `scripts/install-langflow-desktop-macos.sh` | macOS: extrai o `.app` do DMG para `.cache/app` (não mexe em `/Applications`) |
 | `scripts/reset-langflow-desktop-macos.sh` | macOS: apaga os dados do Desktop para o próximo boot ser um primeiro boot |
-| `.github/workflows/e2e-windows.yml` | Pipeline do CI |
+| `.github/workflows/e2e-windows.yml` | Pipeline do CI (Windows) |
+| `.github/workflows/e2e-macos.yml` | Pipeline do CI (macOS) |
 
 ## Escrevendo testes
 

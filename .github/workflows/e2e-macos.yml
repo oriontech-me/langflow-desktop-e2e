@@ -1,0 +1,99 @@
+name: Langflow Desktop E2E (macOS)
+
+# Manual only: macOS minutes count 10x on the free plan (~150 min per run).
+on:
+  workflow_dispatch:
+    inputs:
+      desktop_branch:
+        description: 'langflow-desktop branch whose latest WebDriver-enabled "Build Unsigned" DMG is tested'
+        required: false
+        default: 'release-1.14.0'
+      desktop_run_id:
+        description: 'Specific "Build Unsigned" run id, built with enable_webdriver=true (overrides desktop_branch)'
+        required: false
+        default: ''
+
+concurrency:
+  group: desktop-e2e-macos
+  cancel-in-progress: false
+
+env:
+  DESKTOP_REPO: langflow-ai/langflow-desktop
+  DESKTOP_WORKFLOW: pr-build.yml
+  DMG_ARTIFACT: langflow-macos-arm-dmg
+  DMG_JOB: macOS ARM (DMG)
+
+jobs:
+  e2e:
+    # Apple Silicon runner, matching the arm DMG.
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # Only builds dispatched with enable_webdriver=true embed the WebDriver server the tests talk to,
+      # and the run's inputs aren't exposed by the API: read the DMG job's log for the flag instead.
+      - name: Resolve WebDriver-enabled Build Unsigned run
+        id: build
+        env:
+          GH_TOKEN: ${{ secrets.LANGFLOW_DESKTOP_TOKEN }}
+          RUN_ID: ${{ inputs.desktop_run_id }}
+          BRANCH: ${{ inputs.desktop_branch || 'release-1.14.0' }}
+        run: |
+          has_webdriver() {
+            local job
+            job=$(gh api "repos/$DESKTOP_REPO/actions/runs/$1/jobs" --paginate \
+              --jq ".jobs[] | select(.name == \"$DMG_JOB\" and .conclusion == \"success\") | .id")
+            [ -n "$job" ] && gh api "repos/$DESKTOP_REPO/actions/jobs/$job/logs" | grep -q 'ENABLE_WEBDRIVER: true'
+          }
+
+          if [ -n "$RUN_ID" ]; then
+            has_webdriver "$RUN_ID" || { echo "::error::Run $RUN_ID has no '$DMG_JOB' built with enable_webdriver=true"; exit 1; }
+          else
+            for id in $(gh run list -R "$DESKTOP_REPO" -w "$DESKTOP_WORKFLOW" -b "$BRANCH" -s success -L 20 \
+                          --json databaseId --jq '.[].databaseId'); do
+              if has_webdriver "$id"; then RUN_ID=$id; break; fi
+            done
+            [ -n "$RUN_ID" ] || { echo "::error::No recent Build Unsigned on $BRANCH was built with enable_webdriver=true. Dispatch one with that input checked."; exit 1; }
+          fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Testing DMG from https://github.com/$DESKTOP_REPO/actions/runs/$RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download DMG
+        env:
+          GH_TOKEN: ${{ secrets.LANGFLOW_DESKTOP_TOKEN }}
+        run: gh run download ${{ steps.build.outputs.run_id }} -R "$DESKTOP_REPO" -n "$DMG_ARTIFACT" -D artifacts
+
+      - name: Install Langflow Desktop
+        run: |
+          dmg=$(ls artifacts/*.dmg | head -1)
+          [ -n "$dmg" ] || { echo "::error::No .dmg in the $DMG_ARTIFACT artifact"; exit 1; }
+          app=$(scripts/install-langflow-desktop-macos.sh "$dmg")
+          echo "LANGFLOW_DESKTOP_APP=$app" >> "$GITHUB_ENV"
+          echo "Installed: \`$(basename "$dmg")\` → \`$app\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run E2E
+        run: npm run test:mac
+
+      # Logs only: ~/.langflow/data also holds the database and a .env that may carry secrets.
+      - name: Collect Langflow Desktop logs
+        if: always()
+        run: |
+          mkdir -p test-results/app-logs
+          cp -R ~/Library/Logs/com.LangflowDesktop test-results/app-logs/ 2>/dev/null || true
+          find ~/.langflow -name '*.log' -not -path '*/.langflow-venv/*' -exec cp {} test-results/app-logs/ \; 2>/dev/null || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-e2e-macos-${{ github.run_id }}
+          path: test-results/
+          retention-days: 14
