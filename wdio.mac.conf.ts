@@ -35,6 +35,17 @@ const BACKEND_PORT = 7860;
 
 let app: ChildProcess | undefined;
 
+// Kills the app's whole process group: killing only the app leaves its backend holding port 7860.
+function stopApp() {
+  if (!app?.pid) return;
+  try {
+    process.kill(-app.pid, 'SIGTERM');
+  } catch {
+    // already gone
+  }
+  app = undefined;
+}
+
 export const config: WebdriverIO.Config = {
   ...sharedConfig,
   port: DRIVER_PORT,
@@ -60,6 +71,8 @@ export const config: WebdriverIO.Config = {
       stdio: 'ignore',
       detached: true,
     });
+    // onComplete doesn't run when the run is interrupted (Ctrl+C); the launcher still exits, so stop the app then too.
+    process.once('exit', stopApp);
     await waitForHttp(
       `http://127.0.0.1:${DRIVER_PORT}/status`,
       'Langflow Desktop WebDriver server (was the DMG built with enable_webdriver=true?)',
@@ -69,13 +82,5 @@ export const config: WebdriverIO.Config = {
     });
   },
 
-  onComplete: () => {
-    // Killing only the app leaves its backend holding port 7860 for the next run.
-    if (!app?.pid) return;
-    try {
-      process.kill(-app.pid, 'SIGTERM');
-    } catch {
-      // already gone
-    }
-  },
+  onComplete: stopApp,
 };
