@@ -80,7 +80,7 @@ o plugin `tauri-plugin-wdio-webdriver`, que o `langflow-desktop` compila só qua
 O app abre o servidor em `127.0.0.1:4445` e o WebdriverIO conversa direto com ele — sem `msedgedriver`.
 
 **CI:** workflow **Langflow Desktop E2E (macOS)** (*Actions → Run workflow*), só manual — minuto de macOS conta 10x
-(~150 min da cota por run). Ele procura sozinho o "Build Unsigned" mais recente da branch (padrão `release-1.14.0`) que foi
+(um run leva ~4 min, ~40 min da cota). Ele procura sozinho o "Build Unsigned" mais recente da branch (padrão `release-1.14.0`) que foi
 compilado com `enable_webdriver` (confere o log do job do DMG); se não houver, falha pedindo para disparar um.
 
 ```bash

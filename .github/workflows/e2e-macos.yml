@@ -1,6 +1,6 @@
 name: Langflow Desktop E2E (macOS)
 
-# Manual only: macOS minutes count 10x on the free plan (~150 min per run).
+# Manual only: macOS minutes count 10x on the free plan (a run takes ~4 min, ~40 min of quota).
 on:
   workflow_dispatch:
     inputs:
