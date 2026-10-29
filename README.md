@@ -1,159 +1,163 @@
-# Langflow Desktop — E2E (Windows e macOS)
+# Langflow Desktop — E2E (Windows and macOS)
 
-Testes end-to-end do **IBM Langflow Desktop** com [WebdriverIO](https://webdriver.io). As mesmas specs rodam nos dois sistemas:
+End-to-end tests for **IBM Langflow Desktop** with [WebdriverIO](https://webdriver.io). The same specs run on both systems:
 
-- **Windows**: no **MSI de QA como ele é** — sem plugin, sem build especial, sem mudança no app. Roda no CI (GitHub Actions).
-- **macOS**: num DMG de QA com o servidor WebDriver embutido (`enable_webdriver`). Roda no CI e local — veja [macOS](#macos).
+- **Windows**: against the **QA MSI as it ships** — no plugin, no special build, no change to the app. Runs on CI (GitHub Actions).
+- **macOS**: against a QA DMG with the embedded WebDriver server (`enable_webdriver`). Runs on CI and locally — see [macOS](#macos).
 
-> Linux não tem build do Desktop.
+> There is no Linux build of the Desktop.
 
-## Como funciona
+## How it works
 
-O Langflow Desktop é um app **Tauri**: a interface roda num **WebView2** (o motor do Edge) dentro do app.
-O WebdriverIO controla essa interface pelo `msedgedriver`:
+Langflow Desktop is a **Tauri** app: its UI runs in a **WebView2** (Edge's engine) inside the app.
+WebdriverIO drives that UI through `msedgedriver`:
 
-1. Abrimos o app com a porta de depuração do WebView2 ligada (`--remote-debugging-port=9222`).
-2. O `msedgedriver` se **conecta** ao webview já aberto (`ms:edgeOptions.debuggerAddress`), usando WebDriver Classic.
-3. Antes das specs, o WebdriverIO seleciona a janela que mostra a UI do Langflow.
+1. We start the app with WebView2's debug port on (`--remote-debugging-port=9222`).
+2. `msedgedriver` **attaches** to the already open webview (`ms:edgeOptions.debuggerAddress`), using WebDriver Classic.
+3. Before the specs, WebdriverIO switches to the window showing the Langflow UI.
 
-Tudo isso está no `onPrepare`/`before` do `wdio.conf.ts`; as specs só usam `$('[data-testid="..."]')`.
+All of this lives in `wdio.conf.ts`'s `onPrepare`/`before`; the specs only use `$('[data-testid="..."]')`.
 
-**Por que não `tauri-driver`/`@wdio/tauri-service`?** Eles pedem a porta de depuração pela variável
-`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`, e o WebView2 **ignora variáveis `WEBVIEW2_*` quando o app roda como
-administrador** ([docs da Microsoft](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security#for-an-elevated-host-app-use-appropriate-override-flags)).
-Os runners Windows do GitHub rodam tudo como administrador. A política `HKLM\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments`
-é respeitada mesmo assim — o workflow a grava antes dos testes.
+**Why not `tauri-driver`/`@wdio/tauri-service`?** They ask for the debug port through the
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` variable, and WebView2 **ignores `WEBVIEW2_*` variables when the app runs as
+administrator** ([Microsoft docs](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security#for-an-elevated-host-app-use-appropriate-override-flags)).
+GitHub's Windows runners run everything as administrator. The `HKLM\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments`
+policy is honoured anyway — the workflow sets it before the tests.
 
 ```
-langflow-ai/langflow-desktop          este repo (GitHub Actions, windows-latest)
-  workflow "Build Unsigned"   ──MSI──▶  baixa artefato langflow-windows-msi
-  (pr-build.yml)                        instala com msiexec /qn
-                                        grava a política HKLM da porta de depuração
-                                        WebdriverIO abre "Langflow .exe", conecta o msedgedriver e roda as specs
-                                        publica test-results/ como artefato
+langflow-ai/langflow-desktop          this repo (GitHub Actions, windows-latest)
+  workflow "Build Unsigned"   ──MSI──▶  downloads the langflow-windows-msi artifact
+  (pr-build.yml)                        installs it with msiexec /qn
+                                        sets the HKLM debug-port policy
+                                        WebdriverIO starts "Langflow .exe", attaches msedgedriver and runs the specs
+                                        publishes test-results/ as an artifact
 ```
 
-## Rodar no CI (sem máquina ligada)
+## Running on CI (no machine left on)
 
-1. Crie um **fine-grained PAT** com *Resource owner* `langflow-ai`, só o repositório `langflow-desktop`,
-   permissão **Actions: Read-only**. Um admin da org `langflow-ai` precisa aprovar.
-2. Salve como secret **`LANGFLOW_DESKTOP_TOKEN`** neste repositório (Settings → Secrets → Actions).
-3. Rode o workflow **Langflow Desktop E2E (Windows)** em *Actions → Run workflow*:
-   - `build`: **qual build testar** — cole o link do run do "Build Unsigned" (ou só o número). Para ver os builds
-     disponíveis, rode antes o workflow **Langflow Desktop builds** (roda em Linux, segundos, não gasta minutos de
-     Windows/macOS): ele mostra no *Summary* uma tabela com os builds que ainda têm instalador, por sistema, e de qual PR cada um veio;
-   - `desktop_branch`: usado só com `build` vazio — testa o build mais recente dessa branch (padrão `release-1.13.0`).
-   Se o build escolhido já expirou (ou, no Mac, não tem WebDriver), o run falha logo no primeiro passo dizendo isso.
-   Por enquanto só roda manualmente: no plano free os minutos de Windows contam em dobro. O agendamento
-   (seg–sex 06:00 BRT) está comentado no workflow para ligar quando a suíte estiver estável.
-4. Resultado: aba *Summary* do run + artefato `desktop-e2e-windows-<id>` com logs do WebdriverIO,
-   screenshots de falhas, log do instalador e logs do app.
+1. Create a **fine-grained PAT** with *Resource owner* `langflow-ai`, only the `langflow-desktop` repository,
+   permission **Actions: Read-only**. An admin of the `langflow-ai` org has to approve it.
+2. Save it as the **`LANGFLOW_DESKTOP_TOKEN`** secret in this repository (Settings → Secrets → Actions).
+3. Run the **Langflow Desktop E2E (Windows)** workflow from *Actions → Run workflow*:
+   - `build`: **which build to test** — paste the link of the "Build Unsigned" run (or just its id). To see the
+     available builds, first run the **Langflow Desktop builds** workflow (Linux, a few seconds): its *Summary* shows a
+     table of the builds that still have installers, per system, and which PR each one was built from;
+   - `desktop_branch`: only used when `build` is empty — tests the latest build of that branch (default `release-1.13.0`).
+   If the chosen build has expired (or, on macOS, has no WebDriver), the run fails right at the first step saying so.
+   Manual only for now; a schedule (Mon–Fri 06:00 BRT) is commented out in the workflow, to turn on once the suite is stable.
+4. Result: the run's *Summary* tab + the `desktop-e2e-windows-<id>` artifact with WebdriverIO logs,
+   failure screenshots, the installer log and the app logs.
 
-Os artefatos MSI do Desktop expiram em **7 dias** — o workflow precisa de um "Build Unsigned" recente na branch.
-Um run completo leva ~15 min (o primeiro boot instala Python + Langflow: ~7 min).
+The Desktop's MSI artifacts expire after **7 days** — the workflow needs a recent "Build Unsigned" run.
+A full run takes ~10–15 min (the first boot installs Python + Langflow: ~7 min).
 
-## Rodar no seu PC Windows (para escrever/depurar testes)
+> This repository is public: anyone signed in to GitHub can read the run logs and download the artifacts. Never
+> commit secrets; they go in GitHub Secrets. The artifacts carry logs only — the app's database and `.env` are left out.
 
-⚠️ O app usa a porta fixa **7860** e guarda os dados em `%LOCALAPPDATA%\com.LangflowDesktop` e
-`%APPDATA%\com.LangflowDesktop`. Os testes mexem nos mesmos dados de um Langflow Desktop que você use no dia a dia,
-e o fluxo de "primeiro boot" só aparece numa máquina limpa (sem essas pastas).
+## Running on your Windows PC (to write/debug tests)
 
-Pré-requisitos: Node 20+ e o WebView2 Runtime (já vem no Windows 11). Rode num terminal **normal** (não como
-administrador) — assim a variável de ambiente basta e não é preciso mexer no registro.
+⚠️ The app uses the fixed port **7860** and keeps its data in `%LOCALAPPDATA%\com.LangflowDesktop` and
+`%APPDATA%\com.LangflowDesktop`. The tests touch the same data as a Langflow Desktop you use day to day,
+and the "first boot" flow only shows on a clean machine (without those folders).
+
+Prerequisites: Node 20+ and the WebView2 Runtime (ships with Windows 11). Run from a **regular** terminal (not as
+administrator) — that way the environment variable is enough and the registry stays untouched.
 
 ```powershell
 npm ci
 
-# instala um MSI baixado do workflow "Build Unsigned" e descobre o caminho do .exe
-$env:LANGFLOW_DESKTOP_EXE = ./scripts/install-langflow-desktop.ps1 -MsiPath C:\caminho\Langflow_1.13.0_x64_en-US.msi
-# ou, se já está instalado:
+# installs an MSI downloaded from the "Build Unsigned" workflow and finds the .exe path
+$env:LANGFLOW_DESKTOP_EXE = ./scripts/install-langflow-desktop.ps1 -MsiPath C:\path\Langflow_1.13.0_x64_en-US.msi
+# or, if it's already installed:
 # $env:LANGFLOW_DESKTOP_EXE = "C:\Program Files\Langflow\Langflow .exe"
 
-npm test          # tudo
+npm test          # everything
 npm run test:smoke
 ```
 
-Feche o Langflow Desktop antes de rodar: o WebdriverIO abre a própria instância.
+Quit Langflow Desktop before running: WebdriverIO starts its own instance.
 
 ## macOS
 
-No Mac o WebView (WKWebView) não tem porta de depuração, então o app precisa trazer o próprio servidor WebDriver:
-o plugin `tauri-plugin-wdio-webdriver`, que o `langflow-desktop` compila só quando o workflow **"Build Unsigned"**
-é disparado com **`enable_webdriver` = true** (feature `webdriver`; nunca entra em build de produção).
-O app abre o servidor em `127.0.0.1:4445` e o WebdriverIO conversa direto com ele — sem `msedgedriver`.
+On macOS the webview (WKWebView) has no debug port, so the app has to bring its own WebDriver server:
+the `tauri-plugin-wdio-webdriver` plugin, which `langflow-desktop` only compiles when the **"Build Unsigned"** workflow
+is dispatched with **`enable_webdriver` = true** (`webdriver` feature; it never goes into a production build).
+The app opens the server on `127.0.0.1:4445` and WebdriverIO talks to it directly — no `msedgedriver`.
 
-**CI:** workflow **Langflow Desktop E2E (macOS)** (*Actions → Run workflow*), só manual — minuto de macOS conta 10x
-(um run leva ~4 min, ~40 min da cota). Escolha o build no campo `build` (link ou número do run, como no Windows) ou deixe vazio para
-o mais recente da branch (padrão `release-1.14.0`) compilado com `enable_webdriver` (confere o log do job do DMG). Na
-tabela do workflow **Langflow Desktop builds**, só os DMGs marcados "with WebDriver" servem.
+**CI:** the **Langflow Desktop E2E (macOS)** workflow (*Actions → Run workflow*), manual only; a run takes ~3–4 min, plus
+however long GitHub takes to hand out a macOS machine. Pick the build in the `build` field (run link or id, as on Windows)
+or leave it empty for the latest build of the branch (default `release-1.14.0`) compiled with `enable_webdriver` (checked
+in the DMG job's log). In the **Langflow Desktop builds** table, only DMGs marked "with WebDriver" will do.
 
 ```bash
-# 1. uma vez por build: baixa o DMG de um "Build Unsigned" com enable_webdriver e extrai o app para .cache/app
+# 1. once per build: download the DMG of a "Build Unsigned" run with enable_webdriver and extract the app into .cache/app
 gh run download <RUN_ID> -R langflow-ai/langflow-desktop -n langflow-macos-arm-dmg -D .cache/dmg
 scripts/install-langflow-desktop-macos.sh .cache/dmg/*.dmg
 
-# 2. antes de cada execução: volta ao "primeiro boot" (APAGA os dados do Desktop desta máquina)
+# 2. before each run: back to the "first boot" (DELETES this machine's Desktop data)
 scripts/reset-langflow-desktop-macos.sh
 
-# 3. roda
+# 3. run
 npm run test:mac
-npx wdio run ./wdio.mac.conf.ts --mochaOpts.grep "(Terms agreement|Email registration)"   # só Termos + cadastro
+npx wdio run ./wdio.mac.conf.ts --mochaOpts.grep "(Terms agreement|Email registration)"   # Terms + registration only
 ```
 
-⚠️ No macOS o Desktop guarda tudo em **`~/.langflow`** (venv, uv, `data/database.db`) além de `~/Library/*/com.LangflowDesktop`
-— o reset apaga esses caminhos. Pastas `~/Library/*/langflow` (sem `com.`) são de um Langflow de dev e ficam intactas.
-A porta **7860** precisa estar livre (pare um Langflow de dev antes); o run aborta se estiver ocupada.
+⚠️ On macOS the Desktop keeps everything in **`~/.langflow`** (venv, uv, `data/database.db`) besides `~/Library/*/com.LangflowDesktop`
+— the reset deletes those paths. `~/Library/*/langflow` folders (without `com.`) belong to a dev Langflow and are left alone.
+Port **7860** must be free (stop any dev Langflow first); the run aborts if it's taken. Interrupting a run with Ctrl+C
+also quits the app and its backend.
 
-Diferenças que importam ao escrever testes:
+Differences that matter when writing tests:
 
-- Menus e botões de modal do Langflow (Radix) **não reagem ao clique** do WebDriver no WKWebView — o elemento só ganha
-  foco. Ative pelo teclado: foco + `browser.keys('Enter')`. Funciona igual no Windows.
-- O executável do bundle é `Langflow .app/Contents/MacOS/Langflow ` (com espaço no fim); o `wdio.mac.conf.ts` lê o nome do `Info.plist`.
-- Downloads (exportar flow etc.) abrem a janela **nativa** de "Salvar como", invisível ao WebDriver, nos dois sistemas.
-  Ainda não há como testá-los ponta a ponta.
+- Langflow's menus and modal buttons (Radix) **don't react to WebDriver's click** on WKWebView — the element only gets
+  focus. Activate them with the keyboard: focus + `browser.keys('Enter')`. Works the same on Windows.
+- The bundle's executable is `Langflow .app/Contents/MacOS/Langflow ` (with a trailing space); `wdio.mac.conf.ts` reads the name from `Info.plist`.
+- Downloads (exporting a flow, etc.) open the **native** "Save as" dialog, which WebDriver can't see, on both systems.
+  There's no way to test them end to end yet.
 
-## Estrutura
+## Structure
 
 ```
-wdio.shared.conf.ts          config comum aos dois sistemas (specs, mocha, timeouts, screenshot de falha)
-wdio.conf.ts                 Windows: abre o app com a porta de depuração, sobe o msedgedriver e conecta
-wdio.mac.conf.ts             macOS: abre o app com o servidor WebDriver embutido e conecta nele
+wdio.shared.conf.ts          settings shared by both systems (specs, mocha, timeouts, failure screenshots)
+wdio.conf.ts                 Windows: starts the app with the debug port, starts msedgedriver and attaches
+wdio.mac.conf.ts             macOS: starts the app with the embedded WebDriver server and connects to it
 test/
-  specs/                     cenários (describe/it) e asserções — só aqui tem expect
-    first-boot.spec.ts       Termos → cadastro de e-mail → instalação → tela principal
-  pageobjects/               uma classe por tela: como achar os elementos + ações do usuário
+  specs/                     scenarios (describe/it) and assertions — the only place with expect
+    first-boot.spec.ts       Terms → email registration → install → main page
+  pageobjects/               one class per screen: how to find its elements + the user's actions
     page.ts                  base: byTestId, byText, pressWithKeyboard (Radix)
-    terms.page.ts            Termos de uso
-    registration.page.ts     cadastro de e-mail
-    setup.page.ts            tela de instalação (espera a tela principal logando cada etapa)
-    main.page.ts             tela principal / cards de flow
-    components/              pedaços reutilizáveis (modais, menus)
+    terms.page.ts            terms of use
+    registration.page.ts     email registration
+    setup.page.ts            install screen (waits for the main page, logging each stage)
+    main.page.ts             main page / flow cards
+    components/              reusable pieces (modals, menus)
       export-flow.modal.ts
   utils/
-    backend.ts               API do backend: status, criar/apagar flow (massa e verificação)
+    backend.ts               backend API: status, create/delete a flow (test data and checks)
   data/
-    test-data.ts             dados de entrada (e-mail de teste) e timeouts
-scripts/                     listar/escolher builds, instalar o MSI/DMG, resetar os dados do Desktop no Mac
-.github/workflows/           CI Windows e macOS + "Langflow Desktop builds" (lista os builds disponíveis)
+    test-data.ts             input data (test email) and timeouts
+scripts/                     list/pick builds, install the MSI/DMG, reset the Desktop data on macOS
+.github/workflows/           Windows and macOS CI + "Langflow Desktop builds" (lists the available builds)
 ```
 
-## Escrevendo testes
+## Writing tests
 
-Seguimos o [padrão Page Object do WebdriverIO](https://webdriver.io/docs/pageobjects) e as
-[boas práticas](https://webdriver.io/docs/bestpractices) dele:
+We follow WebdriverIO's [Page Object pattern](https://webdriver.io/docs/pageobjects) and its
+[best practices](https://webdriver.io/docs/bestpractices):
 
-- **Page object = seletores + ações, sem `expect`.** Cada tela é uma classe que estende `Page`, com um getter por
-  elemento (`get agreeButton() { return this.byTestId('terms-agree-button'); }`) e métodos para o que o usuário faz
-  (`agree()`, `submit(email)`). O arquivo exporta **uma instância** (`export default new TermsPage()`), sem estado.
-- **Spec = cenário + asserções.** A spec chama as ações e verifica com `await expect(Page.elemento).toBe...()`.
-  Textos esperados (mensagens de erro, copyright) ficam como constantes no topo da spec.
-- **Seletores:** `data-testid` primeiro (`langflow-ai/langflow-desktop`, `src/frontend/src/`; telas próprias do Desktop
-  em `src/frontend/src/customization/`, o resto é o frontend do Langflow OSS, mesmos ids do `langflow-e2e`).
-  Sem test id: `role`/`id` estável; texto (`byText`) só para mensagens. Nada de classe CSS ou posição.
-- **Esperas:** os `expect` do WebdriverIO já esperam (até `waitforTimeout`, 30 s). Não use `browser.pause`; para algo
-  demorado use `waitUntil`/`waitForDisplayed` com timeout de `test-data.ts`.
-- **Massa e verificação pela API** (`test/utils/backend.ts`): o runner roda na mesma máquina do app, então a spec cria
-  o que precisa (ex.: `createFlow`) e apaga no `after`. Use a UI só para o que o teste está validando.
-- Todas as specs compartilham **uma** instância do app, aberta no `onPrepare`, e rodam em sequência por nome de arquivo
-  (`maxInstances: 1`, porta fixa). O estado de uma spec é o ponto de partida da próxima.
-- Imports entre arquivos `.ts` usam extensão `.js` (`'../pageobjects/terms.page.js'`) — exigência do `module: NodeNext`.
+- **Page object = selectors + actions, no `expect`.** Each screen is a class extending `Page`, with one getter per
+  element (`get agreeButton() { return this.byTestId('terms-agree-button'); }`) and methods for what the user does
+  (`agree()`, `submit(email)`). The file exports **one instance** (`export default new TermsPage()`), with no state.
+- **Spec = scenario + assertions.** The spec calls the actions and checks with `await expect(Page.element).toBe...()`.
+  Expected copy (error messages, copyright) lives as constants at the top of the spec.
+- **Selectors:** `data-testid` first (`langflow-ai/langflow-desktop`, `src/frontend/src/`; the Desktop's own screens
+  are in `src/frontend/src/customization/`, the rest is the Langflow OSS frontend, same ids as `langflow-e2e`).
+  Without a test id: a stable `role`/`id`; text (`byText`) only for messages. No CSS classes or positions.
+- **Waits:** WebdriverIO's `expect` already waits (up to `waitforTimeout`, 30 s). Don't use `browser.pause`; for
+  something slow use `waitUntil`/`waitForDisplayed` with a timeout from `test-data.ts`.
+- **Test data and checks through the API** (`test/utils/backend.ts`): the runner sits on the same machine as the app,
+  so the spec creates what it needs (e.g. `createFlow`) and deletes it in `after`. Use the UI only for what the test validates.
+- All specs share **one** app instance, started in `onPrepare`, and run in sequence by file name
+  (`maxInstances: 1`, fixed port). One spec's end state is the next one's starting point.
+- Imports between `.ts` files use the `.js` extension (`'../pageobjects/terms.page.js'`) — required by `module: NodeNext`.
+- `main` only takes changes through a pull request: work on a branch and open a PR.
