@@ -44,18 +44,24 @@ origin() {
     echo "[PR #${BASH_REMATCH[1]}](https://github.com/$REPO/pull/${BASH_REMATCH[1]}) ${BASH_REMATCH[2]}"
     return
   fi
-  pr=$(gh api "repos/$REPO/pulls?head=${REPO%%/*}:$branch&state=all&per_page=1" \
-         --jq '.[0] | select(.) | "[PR #\(.number)](\(.html_url)) \(.title)"' 2>/dev/null | tr -d '\r' || true)
+  # On an error (403 without that permission) gh prints the error body to stdout: keep the output only on success.
+  if pr=$(gh api "repos/$REPO/pulls?head=${REPO%%/*}:$branch&state=all&per_page=1" \
+            --jq '.[0] | select(.) | "[PR #\(.number)](\(.html_url)) \(.title)"' 2>/dev/null); then
+    pr=${pr%$'\r'}
+  else
+    pr=''
+  fi
   echo "${pr:-no PR · last commit: $commit}"
 }
 
 list() {
   echo "| Build | Built from | Branch @ commit | Created | Windows MSI | macOS DMG |"
   echo "|---|---|---|---|---|---|"
+  # The rows come in on fd 3: the gh calls inside the loop would otherwise read (and eat) them from stdin.
   gh api "repos/$REPO/actions/workflows/$WORKFLOW/runs?status=success&per_page=${1:-30}" \
     --jq '.workflow_runs[] | [.id, .head_branch, .created_at, .head_sha[0:7], .display_title,
            (.head_commit.message | split("\n")[0])] | map(tostring | gsub("[\t|]"; " ")) | @tsv' | tr -d '\r' |
-    while IFS=$'\t' read -r id branch created sha title commit; do
+    while IFS=$'\t' read -r -u 3 id branch created sha title commit; do
       names=$(artifacts "$id")
       msi='—'
       dmg='—'
@@ -65,7 +71,7 @@ list() {
       fi
       [ "$msi$dmg" = '——' ] && continue
       echo "| [$id](https://github.com/$REPO/actions/runs/$id) | $(origin "$branch" "$title" "$commit") | \`$branch\` @ \`$sha\` | ${created%T*} | $msi | $dmg |"
-    done
+    done 3<&0 </dev/null
 }
 
 # One line for the E2E run's summary: which build is tested and what it was made from.
