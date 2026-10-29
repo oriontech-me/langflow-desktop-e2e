@@ -44,7 +44,8 @@ jobs:
             local job
             job=$(gh api "repos/$DESKTOP_REPO/actions/runs/$1/jobs" --paginate \
               --jq ".jobs[] | select(.name == \"$DMG_JOB\" and .conclusion == \"success\") | .id")
-            [ -n "$job" ] && gh api "repos/$DESKTOP_REPO/actions/jobs/$job/logs" | grep -q 'ENABLE_WEBDRIVER: true'
+            # Not grep -q: it exits on the first match, gh dies of SIGPIPE and pipefail fails the check.
+            [ -n "$job" ] && gh api "repos/$DESKTOP_REPO/actions/jobs/$job/logs" | grep -F 'ENABLE_WEBDRIVER: true' >/dev/null
           }
 
           if [ -n "$RUN_ID" ]; then
