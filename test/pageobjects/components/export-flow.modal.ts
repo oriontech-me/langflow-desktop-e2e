@@ -10,7 +10,7 @@ class ExportFlowModal extends Page {
   get exportButton() { return this.byTestId('modal-export-button'); }
 
   async export() {
-    await this.pressWithKeyboard(this.exportButton);
+    await this.clickInPage(this.exportButton);
   }
 }
 

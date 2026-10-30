@@ -21,4 +21,27 @@ export default class Page {
     await element.execute((node) => (node as HTMLElement).focus());
     await browser.keys('Enter');
   }
+
+  // An item of an open Radix dropdown menu. Opening the menu moves focus to its first item, so focusing
+  // another item from outside doesn't stick: arrow down to it, like a keyboard user, then press Enter.
+  protected async chooseMenuItem(testId: string) {
+    const focused = () => browser.execute(() => document.activeElement?.getAttribute('data-testid') ?? '');
+    await this.byTestId(testId).waitForDisplayed();
+    await browser.waitUntil(
+      async () => {
+        if ((await focused()) === testId) return true;
+        await browser.keys('ArrowDown');
+        return false;
+      },
+      { timeout: 5_000, interval: 100, timeoutMsg: `menu item "${testId}" never got focus` },
+    );
+    await browser.keys('Enter');
+  }
+
+  // Runs the element's click handler straight from the page. For a Radix dialog's buttons, where focus +
+  // Enter doesn't submit on WKWebView (seen on the export modal).
+  protected async clickInPage(element: ChainablePromiseElement) {
+    await element.waitForDisplayed();
+    await element.execute((node) => (node as HTMLElement).click());
+  }
 }

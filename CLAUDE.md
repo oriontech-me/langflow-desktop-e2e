@@ -31,10 +31,11 @@ To add or change a test scenario, use the `adding-desktop-e2e-scenarios` skill (
 
 ## Known limits
 
-- Radix triggers (dropdown menus, some dialog buttons) do not open with a WebDriver click on WKWebView:
-  use `pressWithKeyboard` from `test/pageobjects/page.ts` (focus + Enter), which works on both systems.
-- Native OS dialogs (save/open file) can't be driven, and `__TAURI_INTERNALS__.invoke` is read-only, so
-  it can't be stubbed. This is why `flow-export.spec.ts` is skipped.
+- Radix on WKWebView: a WebDriver click doesn't open triggers. `test/pageobjects/page.ts` has the ways
+  that work on both systems: `pressWithKeyboard` (menu triggers), `chooseMenuItem` (items of an open
+  menu, by arrow keys) and `clickInPage` (dialog buttons).
+- Native OS dialogs can't be driven. The "Save as" panel is answered instead with `answerSaveDialogWith`
+  (`test/utils/native-dialogs.ts`), which replies to the page's IPC request; the app still writes the file.
 - Never touch `~/Library/Caches/langflow` or `~/Library/Application Support/langflow` (no `com.`):
   they belong to a dev Langflow, not the Desktop.
 

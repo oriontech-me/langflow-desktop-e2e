@@ -40,8 +40,9 @@ like `main.page.ts` does.
 ## 2. Write it the way the repo already does
 
 - **Page object** (`test/pageobjects/`, modals in `components/`): extends `Page`, one getter per element,
-  one method per user action, `export default new X()`, no `expect`. Radix menus/dialog buttons:
-  `pressWithKeyboard`, never `click()`. Radix content renders in a portal: select it globally, not
+  one method per user action, `export default new X()`, no `expect`. Radix on WKWebView: never `click()`;
+  `pressWithKeyboard` for a menu trigger, `chooseMenuItem` for its items, `clickInPage` for dialog
+  buttons. A native "Save as" panel: `answerSaveDialogWith` before the action that opens it. Radix content renders in a portal: select it globally, not
   inside the trigger's parent.
 - **Spec** (`test/specs/`): actions + `await expect(...)`; expected copy as constants at the top.
   The file must sort **after** `first-boot.spec.ts`: it starts on the main page left by the previous spec,
