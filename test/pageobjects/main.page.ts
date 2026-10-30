@@ -13,7 +13,7 @@ class MainPage extends Page {
 
   async openExportModal(flowId: string) {
     await this.pressWithKeyboard(this.flowCard(flowId).$('[data-testid="home-dropdown-menu"]'));
-    await this.pressWithKeyboard(this.byTestId('btn-download-json'));
+    await this.chooseMenuItem('btn-download-json');
     await ExportFlowModal.exportButton.waitForDisplayed();
   }
 }
