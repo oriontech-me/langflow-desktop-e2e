@@ -42,6 +42,7 @@ To add or change a test scenario, use the `adding-desktop-e2e-scenarios` skill (
 
 - The repository is **public**: never commit tokens, `.env` files or app data. CI artifacts exclude the
   database and `.env` on purpose.
-- `main` only takes changes through a pull request: work on a branch, open a PR.
+- `main` only takes changes through a pull request: work on a branch. Pushing a work branch to run CI is
+  fine; open PRs only when the QA asks.
 - Only write the test scenarios the QA asks for.
-- Code, comments, README and PRs are in English.
+- Talk to the QA in Portuguese; code, comments, README, commits and PRs are in English.

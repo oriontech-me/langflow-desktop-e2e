@@ -5,8 +5,18 @@ description: Use when the QA hands over a Langflow Desktop scenario to automate,
 
 # Adding a Langflow Desktop E2E scenario
 
-A scenario is done when it passes on **macOS and Windows CI** against the same Desktop build, has been
-seen failing once, and is in a PR. Automate only what the QA asked for.
+A scenario is done when it passes on **macOS and Windows CI** against the same Desktop build, and every
+new `it` has been seen failing once. Automate only what the QA asked for. Talk to the QA in Portuguese;
+everything committed is in English.
+
+Read `references/conventions.md` before writing code, and `references/pr-guide.md` before committing.
+
+## 0. Confirm the scenario before coding
+
+Write it back to the QA in five lines and wait for an OK:
+**Spec file** · **Objective** (what and why) · **Precondition** (state the app starts in) ·
+**Steps** (user actions) · **Validation** (the observable pass condition, one per `it`).
+If the code later shows the scenario is wrong, go back to the QA; don't quietly weaken an assertion.
 
 ## 1. Find the selectors in the Desktop source, not by guessing
 
@@ -23,8 +33,9 @@ gh api "repos/langflow-ai/langflow-desktop/contents/<path>?ref=<branch>" --jq .c
 Selector order: `data-testid` → stable `id`/`role` → `byText` (only for messages). Never CSS classes or
 positions. UI copy is `t("key")`: the English text is in `src/frontend/src/locales/en.json`. If the
 test id sits on an inner element of a menu trigger, press the focusable ancestor instead, e.g.
-`$('button:has([data-testid="x"])')`. If the element has no usable selector, tell the QA and ask the Langflow team for a test id;
-don't invent one. Put the source path in a comment on the page object, like `main.page.ts` does.
+`$('button:has([data-testid="x"])')`. If the element has no usable selector, tell the QA and ask the
+Langflow team for a test id; don't invent one. Put the source path in a comment on the page object,
+like `main.page.ts` does.
 
 ## 2. Write it the way the repo already does
 
@@ -49,9 +60,8 @@ scripts/reset-langflow-desktop-macos.sh && npm run test:mac   # full suite: firs
 The reset deletes only Langflow Desktop's data (`~/.langflow`, `~/Library/*/com.LangflowDesktop`), never
 a dev Langflow's. Tell the QA before the first reset in a session.
 
-Then break one selector or expected value, run again, confirm the new test fails with a clear message,
-and revert. Then CI, from the branch, on one build that has both installers and a DMG
-"with WebDriver":
+Then force-fail **each new `it`** (recipe in `references/conventions.md`). CI runs from a pushed branch:
+commit on a `test/...` branch (never `main`), push it and tell the QA. Then run CI from that branch, on one build that has both installers and a DMG "with WebDriver":
 
 ```bash
 GH_TOKEN=$(gh auth token) scripts/desktop-builds.sh list     # pick <build id>
@@ -61,11 +71,11 @@ gh run list -R oriontech-me/langflow-desktop-e2e -b <branch> -L 2   # then: gh r
 ```
 
 If no build has both, run each system on its newest valid build and say so in the PR.
-
 A failure on one system only is usually the webview: check the failure screenshot in the run's
 artifact before changing waits.
 
-## 4. Deliver
+## 4. Report, then deliver when asked
 
-Branch off `main`, commit only the files for this scenario, open a PR with both CI run links and what the
-scenario covers. Never push to `main`.
+Report to the QA: the scenario, the local and CI results (from the final `N passing` line or the run's
+conclusion), the build tested and the force-fail outcome. Open the PR only when the QA asks
+("abre o PR", "pode subir"), following `references/pr-guide.md`. Never push to `main`.
