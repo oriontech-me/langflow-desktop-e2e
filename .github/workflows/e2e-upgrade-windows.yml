@@ -1,0 +1,99 @@
+name: Langflow Desktop Upgrade E2E (Windows)
+
+# Installs an older QA release, creates data on it and updates it in-app to the current QA release
+# (the version qa_latest.json names), then checks the data. QA releases are the builds of the
+# "QA Release" workflow in langflow-ai/langflow-desktop, kept in the public langflow-ai/desktop-updates
+# repo (qa-releases/v<version>), so no token is needed and they don't expire like Build Unsigned runs.
+on:
+  workflow_dispatch:
+    inputs:
+      from_version:
+        description: 'QA release to upgrade from (a folder of desktop-updates/qa-releases, without the "v")'
+        required: true
+        default: '1.12.2'
+
+concurrency:
+  group: desktop-e2e-upgrade-windows
+  cancel-in-progress: false
+
+env:
+  UPDATES_RAW: https://raw.githubusercontent.com/langflow-ai/desktop-updates/RELEASE
+  # The installers are Git LFS files: raw.githubusercontent.com serves the pointer, this host the file.
+  UPDATES_MEDIA: https://media.githubusercontent.com/media/langflow-ai/desktop-updates/RELEASE
+  UPGRADE_FROM_VERSION: ${{ inputs.from_version || '1.12.2' }}
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Describe the upgrade
+        run: |
+          $latest = (Invoke-RestMethod "$env:UPDATES_RAW/qa_latest.json?t=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())").version
+          "Upgrade **$env:UPGRADE_FROM_VERSION → $latest** (current QA release in qa_latest.json)" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Download the old QA release
+        run: |
+          $v = $env:UPGRADE_FROM_VERSION
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          $msi = "artifacts/Langflow_${v}_x64_en-US.msi"
+          Invoke-WebRequest "$env:UPDATES_MEDIA/qa-releases/v$v/windows/Langflow_${v}_x64_en-US.msi" -OutFile $msi
+          # An LFS pointer instead of the file means the URL is wrong: fail here, not in msiexec.
+          if ((Get-Item $msi).Length -lt 10MB) { throw "Downloaded $msi is not an installer: check that qa-releases/v$v exists" }
+
+      - name: Install the old QA release
+        run: |
+          $msi = Get-ChildItem artifacts -Filter *.msi | Select-Object -First 1
+          $exe = ./scripts/install-langflow-desktop.ps1 -MsiPath $msi.FullName
+          "LANGFLOW_DESKTOP_EXE=$exe" >> $env:GITHUB_ENV
+          "Installed: ``$($msi.Name)`` → ``$exe``" >> $env:GITHUB_STEP_SUMMARY
+
+      # Same as the regular Windows workflow: elevated runners only honour the HKLM policy. It also covers
+      # the app the update relaunches, so the test can attach to it again.
+      - name: Enable WebView2 remote debugging (HKLM policy)
+        run: |
+          $key = 'HKLM:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name '*' -Value '--remote-debugging-port=9222' -PropertyType String -Force | Out-Null
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run upgrade E2E
+        run: npm run test:upgrade
+
+      - name: Collect Langflow Desktop logs
+        if: always()
+        run: |
+          $roots = @{
+            local   = Join-Path $env:LOCALAPPDATA 'com.LangflowDesktop'
+            roaming = Join-Path $env:APPDATA 'com.LangflowDesktop'
+          }
+          foreach ($name in $roots.Keys) {
+            $root = $roots[$name]
+            if (-not (Test-Path $root)) { continue }
+            Get-ChildItem $root -Recurse -File -Include *.log, *.txt -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -notmatch '\\\.langflow-venv\\' } |
+              ForEach-Object {
+                $dest = Join-Path "test-results/app-logs/$name" $_.FullName.Substring($root.Length)
+                New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
+                Copy-Item -LiteralPath $_.FullName -Destination $dest
+              }
+          }
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-e2e-upgrade-windows-${{ github.run_id }}
+          path: test-results/
+          retention-days: 14

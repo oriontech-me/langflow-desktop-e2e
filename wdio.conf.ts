@@ -2,6 +2,7 @@ import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { start as startEdgeDriver } from 'edgedriver';
+import { DEBUG_PORT, switchToAppWindow } from './test/utils/app-window.js';
 import { sharedConfig, waitForHttp } from './wdio.shared.conf.js';
 
 // Path to the installed "Langflow .exe". CI resolves it after installing the MSI
@@ -13,7 +14,6 @@ if (!appPath || !fs.existsSync(appPath)) {
   );
 }
 
-const DEBUG_PORT = 9222;
 const DRIVER_PORT = 9515;
 
 // We launch the app ourselves with WebView2 remote debugging on and let msedgedriver attach to it
@@ -70,17 +70,16 @@ export const config: WebdriverIO.Config = {
     await waitForHttp(`http://127.0.0.1:${DEBUG_PORT}/json/version`, 'Langflow Desktop WebView2 debug port', 60_000);
   },
 
-  // The attached session may start on a non-app target; switch to the window serving the Langflow UI.
-  before: async () => {
-    for (const handle of await browser.getWindowHandles()) {
-      await browser.switchToWindow(handle);
-      if (!(await browser.getUrl()).startsWith('about:')) return;
-    }
-    throw new Error('No WebView2 target is serving the Langflow Desktop UI');
-  },
+  before: switchToAppWindow,
 
   onComplete: () => {
     killTree(app?.pid);
+    // An app that restarted itself (the upgrade spec) is a new process, outside the tree we launched.
+    try {
+      execFileSync('taskkill', ['/IM', path.basename(appPath), '/T', '/F'], { stdio: 'ignore' });
+    } catch {
+      // not running
+    }
     killTree(driver?.pid);
   },
 };

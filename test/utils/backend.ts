@@ -11,15 +11,25 @@ export async function backendStatus(): Promise<number> {
   }
 }
 
-async function request(method: string, apiPath: string, body?: unknown): Promise<Response> {
+// Calls the API as the Desktop's single (auto-login) user. A FormData body is sent as multipart.
+export async function request(method: string, apiPath: string, body?: unknown): Promise<Response> {
   const login = await fetch(`${BACKEND_URL}/api/v1/auto_login`);
   if (!login.ok) throw new Error(`auto_login failed: HTTP ${login.status}`);
   const { access_token } = (await login.json()) as { access_token: string };
-  return fetch(`${BACKEND_URL}${apiPath}`, {
-    method,
-    headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const headers: Record<string, string> = { Authorization: `Bearer ${access_token}` };
+  if (body !== undefined && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
+  let payload: BodyInit | undefined;
+  if (body instanceof FormData) payload = body;
+  else if (body !== undefined) payload = JSON.stringify(body);
+  return fetch(`${BACKEND_URL}${apiPath}`, { method, headers, body: payload });
+}
+
+// request() that expects `status` and returns the parsed JSON body; any other status throws with the body.
+export async function requestJson<T>(method: string, apiPath: string, status: number, body?: unknown): Promise<T> {
+  const res = await request(method, apiPath, body);
+  const text = await res.text();
+  if (res.status !== status) throw new Error(`${method} ${apiPath}: HTTP ${res.status} (expected ${status}) ${text}`);
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export interface Flow {
