@@ -8,4 +8,6 @@ export const Timeouts = {
   firstBootInstall: 15 * 60_000,
   // An already set-up app only starts its backend.
   backendStart: 5 * 60_000,
+  // The in-app update downloads the new MSI (hundreds of MB), installs it and restarts the app.
+  updateInstall: 15 * 60_000,
 } as const;
