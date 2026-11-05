@@ -6,7 +6,7 @@ import MainPage from '../pageobjects/main.page.js';
 import RegistrationPage from '../pageobjects/registration.page.js';
 import SetupPage from '../pageobjects/setup.page.js';
 import TermsPage from '../pageobjects/terms.page.js';
-import { reattachAfterRestart, webviewBrowserId } from '../utils/app-window.js';
+import { appInstanceId, reattachAfterRestart } from '../utils/app-window.js';
 import { backendStatus } from '../utils/backend.js';
 import {
   apiKeyStatus,
@@ -27,9 +27,10 @@ import {
 
 // Upgrade from an older QA release to the current one, the way a QA user does it: first boot on the old
 // version, create data, "Update" in the profile menu, then check the data on the new version.
-// Starts on a clean Windows machine with UPGRADE_FROM_VERSION installed from langflow-ai/desktop-updates
-// (qa-releases/v<version>). QA builds read their updates from qa_latest.json, so the version updated to
-// is whatever that manifest names when the test runs, not a Build Unsigned run.
+// Starts on a clean machine (Windows or macOS) with UPGRADE_FROM_VERSION installed from
+// langflow-ai/desktop-updates (qa-releases/v<version>). On macOS both releases must be built with
+// enable_webdriver=true. QA builds read their updates from qa_latest.json, so the version updated to is
+// whatever that manifest names when the test runs, not a Build Unsigned run.
 // The steps share one app and run in order. The app restarts itself during the update; the test then
 // attaches a new session to the new process.
 // The regular first boot (terms, registration, setup) is covered by first-boot.spec.ts; here it is only
@@ -130,13 +131,13 @@ describe('Upgrade from a previous QA release @upgrade', () => {
 
   describe('Update', () => {
     it('installs the update and restarts the app by itself', async () => {
-      const oldBrowserId = await webviewBrowserId();
-      if (!oldBrowserId) throw new Error('the WebView2 debug port is not open before the update');
+      const oldInstance = await appInstanceId();
+      if (!oldInstance) throw new Error('the app cannot be reached before the update');
 
       await UpgradeModal.installUpdate();
 
       // update_app stops the backend before downloading; the old process then exits for the installer.
-      await reattachAfterRestart(oldBrowserId, Timeouts.updateInstall);
+      await reattachAfterRestart(oldInstance, Timeouts.updateInstall);
     });
 
     it('reaches the main page with the backend up, asking again only for what changed', async () => {

@@ -2,6 +2,7 @@ import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SevereServiceError } from 'webdriverio';
+import { WEBDRIVER_PORT as DRIVER_PORT } from './test/utils/app-window.js';
 import { sharedConfig, waitForHttp } from './wdio.shared.conf.js';
 
 // macOS runs against a "Build Unsigned" DMG built with enable_webdriver=true: the app embeds
@@ -23,20 +24,19 @@ function installedApp(): string | undefined {
   return path.join(DEFAULT_APP_DIR, bundle, 'Contents/MacOS', exe);
 }
 
-const appPath = process.env.LANGFLOW_DESKTOP_APP || installedApp();
+export const appPath = process.env.LANGFLOW_DESKTOP_APP || installedApp();
 if (!appPath || !fs.existsSync(appPath)) {
   throw new Error(
     `No Langflow Desktop app: set LANGFLOW_DESKTOP_APP or run scripts/install-langflow-desktop-macos.sh <dmg> (got: ${appPath ?? '<unset>'})`,
   );
 }
 
-const DRIVER_PORT = 4445;
 const BACKEND_PORT = 7860;
 
 let app: ChildProcess | undefined;
 
 // Kills the app's whole process group: killing only the app leaves its backend holding port 7860.
-function stopApp() {
+export function stopApp() {
   if (!app?.pid) return;
   try {
     process.kill(-app.pid, 'SIGTERM');
@@ -75,7 +75,7 @@ export const config: WebdriverIO.Config = {
     process.once('exit', stopApp);
     await waitForHttp(
       `http://127.0.0.1:${DRIVER_PORT}/status`,
-      'Langflow Desktop WebDriver server (was the DMG built with enable_webdriver=true?)',
+      'Langflow Desktop WebDriver server (was the app built with enable_webdriver=true?)',
       60_000,
     ).catch((err: Error) => {
       throw new SevereServiceError(err.message);

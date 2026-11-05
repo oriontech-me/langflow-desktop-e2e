@@ -35,15 +35,17 @@ langflow-ai/langflow-desktop                 this repo (GitHub Actions)
 macOS needs a build made with `enable_webdriver` (marked "with WebDriver" in the builds list).
 Builds expire after 7 days.
 
-### Upgrade test (Windows)
+### Upgrade test
 
-*Actions* → **Langflow Desktop Upgrade E2E (Windows)** → *Run workflow*, with `from_version` set to an older QA release
+*Actions* → **Langflow Desktop Upgrade E2E (Windows)** or **(macOS)** → *Run workflow*, with `from_version` set to an older QA release
 (a folder of [`desktop-updates/qa-releases`](https://github.com/langflow-ai/desktop-updates/tree/RELEASE/qa-releases),
 e.g. `1.12.2`). It installs that release, creates data on it (projects, flows, a flow version, global variables, a file,
 an API key, a knowledge base, a memory base, an MCP server and chat history), clicks **Update** in the profile menu and
 checks the data on the new version. QA builds update to the version `qa_latest.json` names, so that is the version
 tested: publish the build you want first with the **QA Release** workflow of `langflow-desktop`. The spec lives in
-`test/upgrade/` and runs with `npm run test:upgrade`, apart from the regular suite.
+`test/upgrade/` and runs with `npm run test:upgrade` (`npm run test:upgrade:mac` on macOS), apart from the regular
+suite. On macOS both releases, the old one and the one in `qa_latest.json`, must be published by a **QA Release** run
+with `enable_webdriver=true`; otherwise the test can't drive the old app or attach to the new one.
 
 ## Run locally
 
