@@ -1,0 +1,88 @@
+name: Langflow Desktop Upgrade E2E (macOS)
+
+# Same scenario as the Windows upgrade workflow, on Apple Silicon. Installs an older QA release, creates
+# data on it and updates it in-app to the current QA release (the version qa_latest.json names).
+# Both releases must come from a "QA Release" run with enable_webdriver=true: the test drives the old app
+# through its embedded WebDriver server and attaches to the new one after the restart.
+# Manual only: macOS minutes count 10x on the free plan.
+on:
+  workflow_dispatch:
+    inputs:
+      from_version:
+        description: 'QA release to upgrade from, built with enable_webdriver=true (a folder of desktop-updates/qa-releases, without the "v")'
+        required: true
+
+concurrency:
+  group: desktop-e2e-upgrade-macos
+  cancel-in-progress: false
+
+env:
+  UPDATES_RAW: https://raw.githubusercontent.com/langflow-ai/desktop-updates/RELEASE
+  # The app archives are Git LFS files: raw.githubusercontent.com serves the pointer, this host the file.
+  UPDATES_MEDIA: https://media.githubusercontent.com/media/langflow-ai/desktop-updates/RELEASE
+  UPGRADE_FROM_VERSION: ${{ inputs.from_version }}
+
+jobs:
+  e2e:
+    # Apple Silicon runner, matching the qa-releases/v<version>/macOS (darwin-aarch64) archive.
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Describe the upgrade
+        run: |
+          latest=$(curl -fsSL "$UPDATES_RAW/qa_latest.json?t=$(date +%s)" | jq -r .version)
+          echo "Upgrade **$UPGRADE_FROM_VERSION → $latest** (current QA release in qa_latest.json)" >> "$GITHUB_STEP_SUMMARY"
+
+      # qa-releases keeps only the updater archive for macOS (no DMG): it holds the .app itself.
+      - name: Download the old QA release
+        run: |
+          mkdir -p artifacts
+          archive=artifacts/Langflow.app.tar.gz
+          curl -fsSL "$UPDATES_MEDIA/qa-releases/v$UPGRADE_FROM_VERSION/macOS/Langflow.app.tar.gz" -o "$archive"
+          # An LFS pointer instead of the file means the URL is wrong: fail here, not in tar.
+          size=$(stat -f %z "$archive")
+          if [ "$size" -lt 10485760 ]; then
+            echo "::error::$archive is not an app archive: check that qa-releases/v$UPGRADE_FROM_VERSION exists"
+            exit 1
+          fi
+
+      # Into .cache/app like the regular macOS workflow; the update replaces the bundle where it is.
+      - name: Install the old QA release
+        run: |
+          dest=.cache/app
+          rm -rf "$dest" && mkdir -p "$dest"
+          tar -xzf artifacts/Langflow.app.tar.gz -C "$dest"
+          app=$(find "$dest" -maxdepth 1 -name '*.app' | head -1)
+          [ -n "$app" ] || { echo "::error::No .app in the archive"; exit 1; }
+          xattr -dr com.apple.quarantine "$app" 2>/dev/null || true
+          exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          echo "LANGFLOW_DESKTOP_APP=$(cd "$(dirname "$app")" && pwd)/$(basename "$app")/Contents/MacOS/$exe" >> "$GITHUB_ENV"
+          echo "Installed: \`qa-releases/v$UPGRADE_FROM_VERSION/macOS\` → \`$app\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run upgrade E2E
+        run: npm run test:upgrade:mac
+
+      # Logs only: ~/.langflow/data also holds the database and a .env that may carry secrets.
+      - name: Collect Langflow Desktop logs
+        if: always()
+        run: |
+          mkdir -p test-results/app-logs
+          cp -R ~/Library/Logs/com.LangflowDesktop test-results/app-logs/ 2>/dev/null || true
+          find ~/.langflow -name '*.log' -not -path '*/.langflow-venv/*' -exec cp {} test-results/app-logs/ \; 2>/dev/null || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-e2e-upgrade-macos-${{ github.run_id }}
+          path: test-results/
+          retention-days: 14
