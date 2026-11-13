@@ -154,11 +154,23 @@ describe('Flow evaluation', () => {
     csvPath = path.join(os.homedir(), 'Downloads', `evaluation-run-${runId}.csv`);
     fs.rmSync(csvPath, { force: true });
 
+    const downloads = path.dirname(csvPath);
+    const clickedAt = Date.now();
     await EvalsPage.exportResults();
-    await browser.waitUntil(() => fs.existsSync(csvPath as string) && fs.statSync(csvPath as string).size > 0, {
-      timeout: Timeouts.download,
-      timeoutMsg: `the results CSV was not written to ${csvPath}`,
-    });
+    // On a miss, name what did land in Downloads, to tell "saved elsewhere or renamed" from "not saved".
+    const newDownloads = () =>
+      fs.existsSync(downloads)
+        ? fs.readdirSync(downloads).filter((name) => fs.statSync(path.join(downloads, name)).mtimeMs >= clickedAt)
+        : [];
+    await browser
+      .waitUntil(() => fs.existsSync(csvPath as string) && fs.statSync(csvPath as string).size > 0, {
+        timeout: Timeouts.download,
+      })
+      .catch(() => {
+        throw new Error(
+          `the results CSV was not written to ${csvPath}; new files in ${downloads}: ${JSON.stringify(newDownloads())}`,
+        );
+      });
     const lines = fs
       .readFileSync(csvPath, 'utf8')
       .replace(/^﻿/, '')
