@@ -10,4 +10,8 @@ export const Timeouts = {
   backendStart: 5 * 60_000,
   // The in-app update downloads the new MSI (hundreds of MB), installs it and restarts the app.
   updateInstall: 15 * 60_000,
+  // An evaluation run of a few rows on a flow without models (each row is one flow run).
+  evaluationRun: 2 * 60_000,
+  // A file the webview downloads by itself (no "Save as" panel).
+  download: 30_000,
 } as const;

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { start as startEdgeDriver } from 'edgedriver';
 import { DEBUG_PORT, switchToAppWindow } from './test/utils/app-window.js';
-import { sharedConfig, waitForHttp } from './wdio.shared.conf.js';
+import { appEnv, sharedConfig, waitForHttp } from './wdio.shared.conf.js';
 
 // Path to the installed "Langflow .exe". CI resolves it after installing the MSI
 // (see scripts/install-langflow-desktop.ps1); locally, export it yourself.
@@ -64,7 +64,7 @@ export const config: WebdriverIO.Config = {
     await waitForHttp(`http://127.0.0.1:${DRIVER_PORT}/status`, `msedgedriver ${version ?? ''}`, 30_000);
 
     app = spawn(appPath, [], {
-      env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEBUG_PORT}` },
+      env: { ...process.env, ...appEnv, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEBUG_PORT}` },
       stdio: 'ignore',
     });
     await waitForHttp(`http://127.0.0.1:${DEBUG_PORT}/json/version`, 'Langflow Desktop WebView2 debug port', 60_000);
