@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { SevereServiceError } from 'webdriverio';
 import { WEBDRIVER_PORT as DRIVER_PORT } from './test/utils/app-window.js';
-import { sharedConfig, waitForHttp } from './wdio.shared.conf.js';
+import { appEnv, sharedConfig, waitForHttp } from './wdio.shared.conf.js';
 
 // macOS runs against a "Build Unsigned" DMG built with enable_webdriver=true: the app embeds
 // tauri-plugin-wdio-webdriver, a W3C WebDriver server, so WebdriverIO talks to the app directly
@@ -67,7 +67,7 @@ export const config: WebdriverIO.Config = {
     }
     // detached: the app leads its own process group, so onComplete can stop the Python backend it starts too.
     app = spawn(appPath, [], {
-      env: { ...process.env, TAURI_WEBDRIVER_PORT: String(DRIVER_PORT) },
+      env: { ...process.env, ...appEnv, TAURI_WEBDRIVER_PORT: String(DRIVER_PORT) },
       stdio: 'ignore',
       detached: true,
     });

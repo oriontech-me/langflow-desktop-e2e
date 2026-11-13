@@ -5,6 +5,11 @@ import path from 'node:path';
 // launched and how WebdriverIO reaches its webview.
 export const outputDir = path.resolve('./test-results');
 
+// Added to the environment the app is launched with. The Desktop passes every LANGFLOW_* variable of its own
+// environment on to the backend, so this is how the suite turns on features that are off by default:
+// Evals (datasets and evaluations, Langflow 1.14+) is behind LANGFLOW_FEATURE_EVALS.
+export const appEnv = { LANGFLOW_FEATURE_EVALS: 'true' } as const;
+
 export async function waitForHttp(url: string, what: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {

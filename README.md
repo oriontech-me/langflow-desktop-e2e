@@ -35,6 +35,9 @@ langflow-ai/langflow-desktop                 this repo (GitHub Actions)
 macOS needs a build made with `enable_webdriver` (marked "with WebDriver" in the builds list).
 Builds expire after 7 days.
 
+The app is launched with `LANGFLOW_FEATURE_EVALS=true` (`appEnv` in `wdio.shared.conf.ts`): Evals is off by default
+and `flow-evaluation.spec.ts` needs it, so the suite targets Desktop 1.14 or later.
+
 ### Upgrade test
 
 *Actions* → **Langflow Desktop Upgrade E2E (Windows)** or **(macOS)** → *Run workflow*, with `from_version` set to an older QA release

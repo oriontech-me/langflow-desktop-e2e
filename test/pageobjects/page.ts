@@ -38,6 +38,35 @@ export default class Page {
     await browser.keys('Enter');
   }
 
+  // Like chooseMenuItem, for menu items without a test id: arrow down until the focused item reads `label`.
+  protected async chooseMenuItemByText(label: string) {
+    const focused = () =>
+      browser.execute(() =>
+        document.activeElement?.getAttribute('role') === 'menuitem'
+          ? (document.activeElement.textContent ?? '').trim()
+          : '',
+      );
+    await $('[role="menu"]').waitForDisplayed();
+    await browser.waitUntil(
+      async () => {
+        if ((await focused()) === label) return true;
+        await browser.keys('ArrowDown');
+        return false;
+      },
+      { timeout: 5_000, interval: 100, timeoutMsg: `menu item "${label}" never got focus` },
+    );
+    await browser.keys('Enter');
+  }
+
+  // Path of the page the webview shows (the Desktop UI is a single-page app: routes change, the origin doesn't).
+  async path(): Promise<string> {
+    return new URL(await browser.getUrl()).pathname;
+  }
+
+  async searchParam(name: string): Promise<string | null> {
+    return new URL(await browser.getUrl()).searchParams.get(name);
+  }
+
   // Runs the element's click handler straight from the page. For a Radix dialog's buttons, where focus +
   // Enter doesn't submit on WKWebView (seen on the export modal).
   protected async clickInPage(element: ChainablePromiseElement) {
