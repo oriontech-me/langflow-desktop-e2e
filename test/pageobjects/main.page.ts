@@ -28,9 +28,10 @@ class MainPage extends Page {
     await this.title.waitForDisplayed();
   }
 
-  // Opens the flow in the editor.
+  // Opens the flow in the editor. The card's click target is a transparent button laid over it; the name
+  // and icon above it don't take clicks.
   async openFlow(flowId: string) {
-    await this.clickInPage(this.flowCard(flowId).$(`[data-testid="flow-name-${flowId}"]`));
+    await this.clickInPage(this.flowCard(flowId).$('[data-testid="list-card-open-button"]'));
   }
 
   async openExportModal(flowId: string) {
