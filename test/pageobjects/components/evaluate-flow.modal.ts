@@ -24,7 +24,9 @@ class EvaluateFlowModal extends Page {
   // The picker's visible value: the chosen model, or why there is none.
   get judgeModelValue() { return this.byTestId('value-dropdown-judge-model'); }
   get judgeRubric() { return $('#judge-rubric'); }
-  get judgeSafetyChecks() { return $$('[data-testid^="judge-safety-"]:not([data-testid$="-info"])'); }
+  // Safety checks and token limits are folded sections: only their header (a toggle) shows until expanded.
+  get judgeSafetyToggle() { return this.byTestId('judge-safety-toggle'); }
+  get judgeSafetyChecks() { return $$('#judge-safety-panel [role="checkbox"]'); }
   get judgeLimitsSection() { return this.byTestId('judge-limits-toggle'); }
 
   // The dataset picker is a Radix popover with a search box: type the (unique) name, Enter picks the match.
@@ -33,6 +35,10 @@ class EvaluateFlowModal extends Page {
     await this.datasetSearch.waitForDisplayed();
     await this.datasetSearch.setValue(name);
     await browser.keys('Enter');
+  }
+
+  async expandSafetyChecks() {
+    await this.clickInPage(this.judgeSafetyToggle);
   }
 
   async toggleScorer(type: 'exact_match' | 'contains' | 'similarity' | 'llm_judge') {

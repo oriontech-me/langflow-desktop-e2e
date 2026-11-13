@@ -105,6 +105,7 @@ describe('Flow evaluation', () => {
     // A clean machine has no model provider set up: nothing to pick as judge.
     await expect(EvaluateFlowModal.judgeModelValue).toHaveText(NO_JUDGE_MODELS);
     await expect(EvaluateFlowModal.judgeRubric).toBeDisplayed();
+    await EvaluateFlowModal.expandSafetyChecks();
     await expect(EvaluateFlowModal.judgeSafetyChecks).toBeElementsArrayOfSize(SAFETY_CHECKS);
     await expect(EvaluateFlowModal.judgeLimitsSection).toBeDisplayed();
     await expect(EvaluateFlowModal.nextButton).toBeDisabled();
