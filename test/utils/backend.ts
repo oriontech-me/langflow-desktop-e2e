@@ -197,3 +197,20 @@ export async function evaluationResults(runId: string): Promise<EvaluationResult
   );
   return page.items;
 }
+
+// Chat messages (Playground history). Routes: langflow src/backend/base/langflow/api/v1/monitor.py.
+export interface Message {
+  id: string;
+  text: string;
+  sender: string;
+  // Paths of the files attached to the message, as the backend stored them.
+  files: string[];
+}
+
+export async function messagesOfFlow(flowId: string): Promise<Message[]> {
+  return requestJson<Message[]>('GET', `/api/v1/monitor/messages?flow_id=${flowId}`, 200);
+}
+
+export async function deleteMessages(ids: string[]) {
+  if (ids.length > 0) await request('DELETE', '/api/v1/monitor/messages', ids);
+}
