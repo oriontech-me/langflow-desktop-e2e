@@ -37,6 +37,9 @@ const UPLOAD_ERROR = 'Error uploading file';
 const UNSUPPORTED_TYPE =
   'Unsupported attachment type. Supported chat attachments include images, PDF, CSV, DOCX, and common text/code files.';
 
+// The name of a stored file: the backend keeps absolute paths, with "\\" on Windows.
+const fileName = (filePath: string) => filePath.split(/[\\/]/).pop();
+
 // True once the <img> has loaded real pixels (a failed load leaves naturalWidth at 0).
 const imageLoaded = (image: ChainablePromiseElement) =>
   image.execute((node) => (node as HTMLImageElement).complete && (node as HTMLImageElement).naturalWidth > 0);
@@ -81,8 +84,7 @@ describe('Playground file upload', () => {
       timeoutMsg: 'the message was not saved',
     });
     const files = (await sentMessage(IMAGE_MESSAGE))?.files ?? [];
-    expect(files).toHaveLength(1);
-    expect(files[0]).toMatch(new RegExp(`/${IMAGE.name.replace('.', '\\.')}$`));
+    expect(files.map(fileName)).toEqual([IMAGE.name]);
   });
 
   it('sends an attached PDF and shows it as a file with its name', async () => {
@@ -97,8 +99,7 @@ describe('Playground file upload', () => {
       timeoutMsg: 'the message was not saved',
     });
     const files = (await sentMessage(PDF_MESSAGE))?.files ?? [];
-    expect(files).toHaveLength(1);
-    expect(files[0]).toMatch(new RegExp(`/${PDF.name.replace('.', '\\.')}$`));
+    expect(files.map(fileName)).toEqual([PDF.name]);
   });
 
   it('refuses an unsupported file type before uploading it', async () => {

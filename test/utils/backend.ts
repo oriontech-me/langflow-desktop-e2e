@@ -203,12 +203,22 @@ export interface Message {
   id: string;
   text: string;
   sender: string;
-  // Paths of the files attached to the message, as the backend stored them.
+  // Paths of the files attached to the message, as the backend stored them: absolute paths on this machine,
+  // with this system's separators.
   files: string[];
 }
 
 export async function messagesOfFlow(flowId: string): Promise<Message[]> {
-  return requestJson<Message[]>('GET', `/api/v1/monitor/messages?flow_id=${flowId}`, 200);
+  const messages = await requestJson<(Omit<Message, 'files'> & { files: string[] | string | null })[]>(
+    'GET',
+    `/api/v1/monitor/messages?flow_id=${flowId}`,
+    200,
+  );
+  // The API serves `files` as a JSON-encoded string.
+  return messages.map((message) => ({
+    ...message,
+    files: typeof message.files === 'string' ? (JSON.parse(message.files) as string[]) : (message.files ?? []),
+  }));
 }
 
 export async function deleteMessages(ids: string[]) {
