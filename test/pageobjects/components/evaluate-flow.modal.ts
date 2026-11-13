@@ -30,8 +30,9 @@ class EvaluateFlowModal extends Page {
   get judgeLimitsSection() { return this.byTestId('judge-limits-toggle'); }
 
   // The dataset picker is a Radix popover with a search box: type the (unique) name, Enter picks the match.
+  // A popover trigger opens on click (not on keydown like a menu), and focus + Enter doesn't click on WKWebView.
   async chooseDataset(name: string) {
-    await this.pressWithKeyboard(this.datasetPicker);
+    await this.clickInPage(this.datasetPicker);
     await this.datasetSearch.waitForDisplayed();
     await this.datasetSearch.setValue(name);
     await browser.keys('Enter');
