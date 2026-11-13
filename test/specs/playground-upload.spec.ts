@@ -37,7 +37,7 @@ const UPLOAD_ERROR = 'Error uploading file';
 const UNSUPPORTED_TYPE =
   'Unsupported attachment type. Supported chat attachments include images, PDF, CSV, DOCX, and common text/code files.';
 
-// The name of a stored file: the backend keeps absolute paths, with "\\" on Windows.
+// The name of a stored file: the backend keeps absolute paths, with backslashes on Windows.
 const fileName = (filePath: string) => filePath.split(/[\\/]/).pop();
 
 // True once the <img> has loaded real pixels (a failed load leaves naturalWidth at 0).
