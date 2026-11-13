@@ -150,8 +150,10 @@ describe('Flow evaluation', () => {
   });
 
   it('exports the results as a CSV file with one line per row', async () => {
-    // The page downloads the file itself (no "Save as" panel), under the name the backend gives it.
-    csvPath = path.join(os.homedir(), 'Downloads', `evaluation-run-${runId}.csv`);
+    // The page downloads the file itself (no "Save as" panel). The backend names it evaluation-run-<run id>.csv,
+    // but the page can't read that header from the Desktop (the backend is another origin), so it falls back
+    // to "evaluation-run.csv" (EvaluationDetailPage.tsx, utils/download-csv.ts).
+    csvPath = path.join(os.homedir(), 'Downloads', 'evaluation-run.csv');
     fs.rmSync(csvPath, { force: true });
 
     const downloads = path.dirname(csvPath);
